@@ -23,6 +23,7 @@ public partial class PageSetupAbout : MyPageRight
 
         ItemAboutPcl.Title = Basics.Metadata.Name;
 
+        BtnMaintainerGitHub.Click += (_, _) => Basics.OpenPath("https://github.com/aodianjun");
         BtnSponsorOriginalAuthor.Click += (_, _) => Basics.OpenPath("https://ifdian.net/a/LTCat");
         BtnGitHubHome.Click += (_, _) => Basics.OpenPath("https://github.com/aodianjun/PCL-CE-AI");
         BtnSourceCode.Click +=

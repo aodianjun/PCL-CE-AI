@@ -3759,4 +3759,8 @@
     <sys:String x:Key="Minecraft.Launch.Login.Microsoft.AppNotApproved.Open">開啟審核頁面</sys:String>
     <sys:String x:Key="Setup.Update.Source.GitHub">更新來源：GitHub · aodianjun/PCL-CE-AI</sys:String>
     <sys:String x:Key="Setup.Update.NoRelease">GitHub 上暫無發行版本，目前為本機建置。</sys:String>
+    <sys:String x:Key="Setup.About.Maintainer.Title">PCL CE-AI 作者</sys:String>
+    <sys:String x:Key="Setup.About.Maintainer.Name">aodianjun</sys:String>
+    <sys:String x:Key="Setup.About.Maintainer.Info">PCL CE-AI 維護者 · 本建置作者</sys:String>
+    <sys:String x:Key="Setup.About.Maintainer.GitHub">GitHub</sys:String>
 </ResourceDictionary>

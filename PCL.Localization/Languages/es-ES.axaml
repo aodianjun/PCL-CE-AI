@@ -83,4 +83,8 @@
     <sys:String x:Key="Minecraft.Launch.Login.Microsoft.AppNotApproved.Open">Open review page</sys:String>
     <sys:String x:Key="Setup.Update.Source.GitHub">Update source: GitHub · aodianjun/PCL-CE-AI</sys:String>
     <sys:String x:Key="Setup.Update.NoRelease">No releases on GitHub yet; this is a local build.</sys:String>
+    <sys:String x:Key="Setup.About.Maintainer.Title">PCL CE-AI Maintainer</sys:String>
+    <sys:String x:Key="Setup.About.Maintainer.Name">aodianjun</sys:String>
+    <sys:String x:Key="Setup.About.Maintainer.Info">Maintainer and author of this build</sys:String>
+    <sys:String x:Key="Setup.About.Maintainer.GitHub">GitHub</sys:String>
 </ResourceDictionary>

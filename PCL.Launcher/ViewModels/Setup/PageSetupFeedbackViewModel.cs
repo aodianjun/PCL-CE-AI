@@ -84,7 +84,7 @@ public partial class PageSetupFeedbackViewModel : ViewModelBase
     public static List<FeedbackItem> FetchFeedbackList()
     {
         var json = Requester.FetchJson(
-            "https://api.github.com/repos/PCL-Community/PCL2-CE/issues?state=all&sort=created&per_page=200",
+            "https://api.github.com/repos/aodianjun/PCL-CE-AI/issues?state=all&sort=created&per_page=200",
             new RequestParam
             {
                 Retries = 3,
@@ -104,10 +104,16 @@ public partial class PageSetupFeedbackViewModel : ViewModelBase
                 issueType = typeObject["name"]?.ToString() ?? string.Empty;
 
             var labels = new List<string>();
+            var labelNames = new List<string>();
             if (issue["labels"] is JsonArray labelArray)
                 foreach (var label in labelArray)
                     if (label is JsonObject labelObject)
+                    {
                         labels.Add(labelObject["id"]?.ToString() ?? string.Empty);
+                        var labelName = labelObject["name"]?.ToString();
+                        if (!string.IsNullOrWhiteSpace(labelName))
+                            labelNames.Add(labelName);
+                    }
 
             result.Add(
                 new FeedbackItem
@@ -123,6 +129,7 @@ public partial class PageSetupFeedbackViewModel : ViewModelBase
                     Content = issue["body"]?.ToString() ?? string.Empty,
                     Url = issue["html_url"]?.ToString() ?? string.Empty,
                     LabelIds = labels,
+                    LabelNames = labelNames,
                     Type = issueType
                 });
         }
@@ -138,8 +145,9 @@ public partial class PageSetupFeedbackViewModel : ViewModelBase
         var grouped = new List<SetupFeedbackEntry>();
         foreach (var item in source ?? [])
         {
-            var tag = item.LabelIds.Find(tagKeys.Contains);
-            if (tag is null) continue;
+            var tag = item.LabelIds.Find(tagKeys.Contains)
+                      ?? MatchTagByName(item.LabelNames)
+                      ?? ((long)TagId.WaitingProcess).ToString();
             grouped.Add(new SetupFeedbackEntry(tag, item));
             if (!Groups.TryGetValue(tag, out var rows)) continue;
             rows.Rows.Add(
@@ -162,6 +170,37 @@ public partial class PageSetupFeedbackViewModel : ViewModelBase
         ShowDecline = Has(TagId.Decline);
         ShowIgnored = Has(TagId.Ignored);
         ShowDuplicate = Has(TagId.Duplicate);
+    }
+
+    private static string? MatchTagByName(IReadOnlyList<string> names)
+    {
+        foreach (var name in names)
+        {
+            var value = name.ToLowerInvariant();
+            TagId? id = null;
+            if (value.Contains("处理中") || value.Contains("processing"))
+                id = TagId.Processing;
+            else if (value.Contains("等待处理") || value.Contains("waiting"))
+                id = TagId.WaitingProcess;
+            else if (value.Contains("已完成") || value.Contains("完成") || value.Contains("completed"))
+                id = TagId.Completed;
+            else if (value.Contains("拒绝") || value.Contains("decline"))
+                id = TagId.Decline;
+            else if (value.Contains("忽略") || value.Contains("ignore"))
+                id = TagId.Ignored;
+            else if (value.Contains("重复") || value.Contains("duplicate"))
+                id = TagId.Duplicate;
+            else if (value.Contains("暂停") || value.Contains("pause"))
+                id = TagId.Pause;
+            else if (value.Contains("即将") || value.Contains("upnext") || value.Contains("up next"))
+                id = TagId.Upnext;
+            else if (value.Contains("等待") || value.Contains("wait"))
+                id = TagId.Wait;
+            if (id is not null)
+                return ((long)id).ToString();
+        }
+
+        return null;
     }
 
     private bool Has(TagId status)
@@ -208,6 +247,7 @@ public sealed class FeedbackItem
     public required string Content { get; init; }
     public required string Url { get; init; }
     public required List<string> LabelIds { get; init; }
+    public List<string> LabelNames { get; init; } = [];
     public required string Type { get; init; }
     public DateTime CreatedAt { get; init; }
 }

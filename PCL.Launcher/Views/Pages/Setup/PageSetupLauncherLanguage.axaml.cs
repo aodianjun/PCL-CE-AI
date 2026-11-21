@@ -30,7 +30,7 @@ public partial class PageSetupLauncherLanguage : MyPageRight, ISetupResetPage
         BtnTranslateWebsite.Click += (_, _) =>
             Basics.OpenPath("https://translate.pclc.cc/projects/pcl-ce/");
         BtnSubmitPullRequest.Click += (_, _) =>
-            Basics.OpenPath("https://github.com/PCL-Community/PCL-CE/pulls");
+            Basics.OpenPath("https://github.com/aodianjun/PCL-CE-AI/pulls");
 
         Loaded += (_, _) =>
         {

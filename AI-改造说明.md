@@ -145,7 +145,15 @@ Release 构建默认不读运行时环境变量，必须在**编译期**把客�
 - 「设置 → 更新」改为 GitHub Releases 更新源：检查 `aodianjun/PCL-CE-AI` 的最新 Release，有更新时显示版本与更新日志，按钮直接打开 Release 页面。
 - 启动时不再连接 PCL CE 官方更新源（MirrorChyan / pysio / naids），避免把 AI 构建自动替换成官方版本。原来的更新通道、自动更新、MirrorChyan CDK 设置卡片已隐藏。
 
-## 八、回滚
+## 八、仓库、反馈与作者
+
+- 「设置 → 关于」新增维护者卡片：aodianjun（本构建作者），头像取自 GitHub，按钮跳转 <https://github.com/aodianjun>；原有作者与社区署名保留。
+- 「设置 → 关于」的 GitHub 主页、源代码、贡献者链接全部指向 `aodianjun/PCL-CE-AI`。
+- 「设置 → 反馈」的 Issues 数据源与「前往反馈」按钮改为 `aodianjun/PCL-CE-AI/issues`；没有标签的 issue 默认归入「等待处理」，也支持按标签名自动归类。
+- 其他残留的上游链接（语言贡献 PR、讨论、调试版下载页）同步指向该仓库。
+- 关闭了 `BuildProvenance` 的官方构建校验（fork 不带官方 Sentry，按上游注释建议关闭）。
+
+## 九、回滚
 
 所有改动都在工作区，没有数据库迁移、没有改存档。回滚步骤：
 

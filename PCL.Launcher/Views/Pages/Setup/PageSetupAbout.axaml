@@ -11,6 +11,29 @@
                        HorizontalScrollBarVisibility="Disabled"
                        VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="25,10">
+            <ui:MyCard Margin="0,15,0,0"
+                       Title="{loc:Loc Setup.About.Maintainer.Title}">
+                <Grid Margin="21,40,21,16"
+                      ColumnDefinitions="40,*,150"
+                      RowDefinitions="45">
+                    <ui:MyImage Width="34"
+                                Height="34"
+                                Margin="3"
+                                CornerRadius="17"
+                                VerticalAlignment="Center"
+                                Source="https://avatars.githubusercontent.com/u/130821781?v=4" />
+                    <ui:MyListItem Grid.Column="1"
+                                   Margin="-5,0,15,0"
+                                   IsHitTestVisible="False"
+                                   Info="{loc:Loc Setup.About.Maintainer.Info}"
+                                   Title="{loc:Loc Setup.About.Maintainer.Name}" />
+                    <ui:MyButton x:Name="BtnMaintainerGitHub"
+                                 Grid.Column="2"
+                                 Height="35"
+                                 Text="{loc:Loc Setup.About.Maintainer.GitHub}" />
+                </Grid>
+            </ui:MyCard>
+
             <ui:MyCard Margin="0,15"
                        Title="{loc:Loc Setup.About.Title}">
                 <Grid Margin="21,40,21,16"

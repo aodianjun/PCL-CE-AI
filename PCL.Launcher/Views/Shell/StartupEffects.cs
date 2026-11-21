@@ -212,7 +212,7 @@ public sealed class StartupEffects(
                         Lang.Text("Main.SpecialVersion.OpenDownloadPageAndExit"),
                         () =>
                         {
-                            OpenWebsite("https://github.com/PCL-Community/PCL2-CE/releases/latest");
+                            OpenWebsite("https://github.com/aodianjun/PCL-CE-AI/releases/latest");
                             UiInteraction.Shutdown();
                         })),
                 IsWarn = true
