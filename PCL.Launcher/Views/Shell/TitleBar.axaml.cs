@@ -91,6 +91,7 @@ public partial class TitleBar : UserControl
         LabTitleLogo.IsVisible = type == 2;
         ImageTitleLogo.IsVisible = type == 3;
         if (type != 4) CELogo.IsVisible = type != 0;
+        LabTitleAiSuffix.IsVisible = CELogo.IsVisible;
 
         if (type == 2) LabTitleLogo.Text = Config.Preference.WindowTitleCustomText;
         if (type == 3)
