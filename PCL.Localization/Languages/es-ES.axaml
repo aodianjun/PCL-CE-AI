@@ -87,4 +87,13 @@
     <sys:String x:Key="Setup.About.Maintainer.Name">aodianjun</sys:String>
     <sys:String x:Key="Setup.About.Maintainer.Info">Maintainer and author of this build</sys:String>
     <sys:String x:Key="Setup.About.Maintainer.GitHub">GitHub</sys:String>
+    <sys:String x:Key="Launch.Ai.NewChat">New chat</sys:String>
+    <sys:String x:Key="Launch.Ai.NewChat.DefaultTitle">New chat</sys:String>
+    <sys:String x:Key="Launch.Ai.Conversations">Conversations</sys:String>
+    <sys:String x:Key="Launch.Ai.Conversations.Title">Conversations</sys:String>
+    <sys:String x:Key="Launch.Ai.Conversations.Empty">No conversations yet</sys:String>
+    <sys:String x:Key="Launch.Ai.Compress">Compress context</sys:String>
+    <sys:String x:Key="Launch.Ai.Compressed">Context compressed; continuing from the summary.</sys:String>
+    <sys:String x:Key="Launch.Ai.Compress.Busy">A reply is in progress; try compressing later.</sys:String>
+    <sys:String x:Key="Launch.Ai.Compress.TooShort">This conversation is too short to compress.</sys:String>
 </ResourceDictionary>

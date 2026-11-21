@@ -8,6 +8,8 @@ PCL CE-AI lets the AI assistant drive the launcher: ask it to "launch the game",
 ## Features
 
 - **AI chat home page**: streaming replies, tool calling, cancel and clear.
+- **Multiple conversations**: start new chats, switch from the conversation list, persisted locally.
+- **Context compression**: compress manually, or automatically summarize when the context grows too long.
 - **Only four controls at the bottom**: Settings (bottom-left), Account, Version, Launch.
 - **AI can**:
   - launch the game and switch versions
@@ -21,6 +23,12 @@ PCL CE-AI lets the AI assistant drive the launcher: ask it to "launch the game",
 - **Settings consolidation**: downloads, mods, modpacks, resource packs, shaders, worlds, datapacks, instance settings, logs, tasks and tools all live under Settings.
 - **Microsoft sign-in**: the Azure client ID is embedded at build time, so every device running the build can sign in directly.
 - **GitHub Releases updates**: no longer uses the official update source, so the build cannot be replaced by upstream releases.
+
+## Conversations and context
+
+- Buttons at the top-right of the chat: new chat, conversation list, compress context, clear chat.
+- Conversations are stored in `PCL/AiChat/conversations.json` and restored on restart.
+- When the context exceeds the threshold (16000 characters by default) it is compressed automatically; you can also compress manually at any time.
 
 ## AI setup
 

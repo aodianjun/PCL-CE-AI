@@ -78,6 +78,21 @@
                             Orientation="Horizontal"
                             Spacing="4"
                             VerticalAlignment="Center">
+                    <ui:MyIconButton x:Name="BtnNewChat"
+                                     Width="28"
+                                     Height="28"
+                                     SvgIcon="lucide/circle-plus"
+                                     ToolTip.Tip="{loc:Loc Launch.Ai.NewChat}" />
+                    <ui:MyIconButton x:Name="BtnConversations"
+                                     Width="28"
+                                     Height="28"
+                                     SvgIcon="lucide/layout-list"
+                                     ToolTip.Tip="{loc:Loc Launch.Ai.Conversations}" />
+                    <ui:MyIconButton x:Name="BtnCompress"
+                                     Width="28"
+                                     Height="28"
+                                     SvgIcon="lucide/file-archive"
+                                     ToolTip.Tip="{loc:Loc Launch.Ai.Compress}" />
                     <ui:MyIconButton x:Name="BtnCancelReply"
                                      Width="28"
                                      Height="28"
@@ -89,11 +104,6 @@
                                      Height="28"
                                      SvgIcon="lucide/trash-2"
                                      ToolTip.Tip="{loc:Loc Launch.Ai.Clear}" />
-                    <ui:MyIconButton x:Name="BtnAiSettings"
-                                     Width="28"
-                                     Height="28"
-                                     SvgIcon="lucide/settings-2"
-                                     ToolTip.Tip="{loc:Loc Launch.Ai.Settings.Tip}" />
                 </StackPanel>
             </Grid>
 
@@ -238,6 +248,50 @@
                     </Grid>
                     <ContentControl x:Name="PanDrawerHost"
                                     Grid.Row="1" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- 对话列表 -->
+        <Grid x:Name="PanConvLayer"
+              Grid.RowSpan="2"
+              ZIndex="4"
+              IsVisible="False">
+            <Border Background="#55000000"
+                    PointerPressed="ConvMask_OnPointerPressed" />
+            <Border Width="330"
+                    HorizontalAlignment="Left"
+                    Background="{DynamicResource ColorBrushBackground}"
+                    CornerRadius="0,8,8,0"
+                    BoxShadow="4 0 10 0 #22000000">
+                <Grid RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0"
+                          Height="46"
+                          ColumnDefinitions="*,Auto"
+                          Margin="14,0,8,0">
+                        <TextBlock VerticalAlignment="Center"
+                                   FontSize="14"
+                                   Text="{loc:Loc Launch.Ai.Conversations.Title}" />
+                        <StackPanel Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <ui:MyIconButton x:Name="BtnNewChatInList"
+                                             Width="28"
+                                             Height="28"
+                                             SvgIcon="lucide/circle-plus"
+                                             ToolTip.Tip="{loc:Loc Launch.Ai.NewChat}" />
+                            <ui:MyIconButton x:Name="BtnCloseConv"
+                                             Width="28"
+                                             Height="28"
+                                             SvgIcon="lucide/x" />
+                        </StackPanel>
+                    </Grid>
+                    <ui:MyScrollViewer Grid.Row="1"
+                                       HorizontalScrollBarVisibility="Disabled"
+                                       VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="PanConversations"
+                                    Margin="8" />
+                    </ui:MyScrollViewer>
                 </Grid>
             </Border>
         </Grid>

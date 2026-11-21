@@ -43,6 +43,8 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
     private readonly ProgressBar _barLaunch;
     private readonly Grid _panDrawerLayer;
     private readonly ContentControl _panDrawerHost;
+    private readonly Grid _panConvLayer;
+    private readonly StackPanel _panConversations;
 
     private PageLaunchLeftViewModel? _viewModel;
     private PageLaunchLeft? _leftPanel;
@@ -69,6 +71,8 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         _barLaunch = this.FindControl<ProgressBar>("BarLaunch")!;
         _panDrawerLayer = this.FindControl<Grid>("PanDrawerLayer")!;
         _panDrawerHost = this.FindControl<ContentControl>("PanDrawerHost")!;
+        _panConvLayer = this.FindControl<Grid>("PanConvLayer")!;
+        _panConversations = this.FindControl<StackPanel>("PanConversations")!;
 
         _txtInput.KeyDown += Input_OnKeyDown;
         PanScroll = _sclChat;
@@ -79,7 +83,11 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         _btnSend.Click += Send_OnClick;
         _btnCancelReply.Click += CancelReply_OnClick;
         this.FindControl<MyIconButton>("BtnClearChat")!.Click += ClearChat_OnClick;
-        this.FindControl<MyIconButton>("BtnAiSettings")!.Click += AiSettings_OnClick;
+        this.FindControl<MyIconButton>("BtnNewChat")!.Click += NewChat_OnClick;
+        this.FindControl<MyIconButton>("BtnConversations")!.Click += Conversations_OnClick;
+        this.FindControl<MyIconButton>("BtnCompress")!.Click += Compress_OnClick;
+        this.FindControl<MyIconButton>("BtnNewChatInList")!.Click += NewChat_OnClick;
+        this.FindControl<MyIconButton>("BtnCloseConv")!.Click += CloseConv_OnClick;
         this.FindControl<MyIconButton>("BtnSettings")!.Click += Settings_OnClick;
         this.FindControl<MyButton>("BtnCancelLaunch")!.Click += CancelLaunch_OnClick;
         this.FindControl<MyIconButton>("BtnCloseDrawer")!.Click += CloseDrawer_OnClick;
@@ -149,6 +157,8 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             AiChatService.Instance.HistoryCleared += OnAiHistoryCleared;
             AiChatService.Instance.BusyChanged += OnAiBusyChanged;
             AiChatService.Instance.StatusChanged += OnAiStatusChanged;
+            AiChatService.Instance.ConversationsChanged += OnConversationsChanged;
+            AiChatService.Instance.ConversationSwitched += OnConversationSwitched;
         }
 
         AttachLaunchController();
@@ -174,6 +184,8 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             AiChatService.Instance.HistoryCleared -= OnAiHistoryCleared;
             AiChatService.Instance.BusyChanged -= OnAiBusyChanged;
             AiChatService.Instance.StatusChanged -= OnAiStatusChanged;
+            AiChatService.Instance.ConversationsChanged -= OnConversationsChanged;
+            AiChatService.Instance.ConversationSwitched -= OnConversationSwitched;
         }
 
         if (_viewModel is not null)
@@ -298,11 +310,6 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         PageRouter.Navigate(PageIds.Setup);
     }
 
-    private void AiSettings_OnClick(object? sender, EventArgs e)
-    {
-        PageRouter.Navigate(PageIds.Setup, SubPageIds.SetupAi);
-    }
-
     private void Account_OnClick(object? sender, PointerReleasedEventArgs? e)
     {
         AttachLaunchController();
@@ -385,6 +392,106 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         AiChatService.Instance.Clear();
     }
 
+    private void NewChat_OnClick(object? sender, EventArgs e)
+    {
+        AiChatService.Instance.NewConversation();
+        CloseConversationList();
+    }
+
+    private void Conversations_OnClick(object? sender, EventArgs e)
+    {
+        if (_panConvLayer.IsVisible)
+        {
+            CloseConversationList();
+            return;
+        }
+
+        BuildConversationList();
+        _panConvLayer.IsVisible = true;
+    }
+
+    private void Compress_OnClick(object? sender, EventArgs e)
+    {
+        _ = AiChatService.Instance.CompressAsync();
+    }
+
+    private void CloseConv_OnClick(object? sender, EventArgs e)
+    {
+        CloseConversationList();
+    }
+
+    private void ConvMask_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        CloseConversationList();
+    }
+
+    private void CloseConversationList()
+    {
+        _panConvLayer.IsVisible = false;
+    }
+
+    private void BuildConversationList()
+    {
+        _panConversations.Children.Clear();
+        var conversations = AiChatService.Instance.Conversations;
+        if (conversations.Count == 0)
+        {
+            _panConversations.Children.Add(new TextBlock
+            {
+                Text = Lang.Text("Launch.Ai.Conversations.Empty"),
+                FontSize = 12,
+                Opacity = 0.6,
+                Margin = new Thickness(10, 12, 10, 0)
+            });
+            return;
+        }
+
+        var currentId = AiChatService.Instance.CurrentConversation.Id;
+        foreach (var conversation in conversations)
+        {
+            var title = string.IsNullOrWhiteSpace(conversation.Title)
+                ? Lang.Text("Launch.Ai.NewChat.DefaultTitle")
+                : conversation.Title;
+            var item = new MyListItem
+            {
+                Title = title,
+                Info = conversation.UpdatedAt.ToString("MM-dd HH:mm"),
+                Tag = conversation,
+                Type = MyListItem.CheckType.Clickable,
+                Checked = conversation.Id == currentId
+            };
+            item.Click += (_, _) =>
+            {
+                AiChatService.Instance.SelectConversation(conversation.Id);
+                CloseConversationList();
+            };
+            _panConversations.Children.Add(item);
+        }
+    }
+
+    private void OnConversationsChanged()
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_panConvLayer.IsVisible)
+                BuildConversationList();
+        });
+    }
+
+    private void OnConversationSwitched()
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            _bubbles.Clear();
+            _bubbleBorders.Clear();
+            _panMessages.Children.Clear();
+            if (AiChatService.Instance.Messages.Count == 0)
+                ShowWelcome();
+            else
+                RenderExistingHistory();
+        });
+    }
+
     private void OnAiMessageAdded(AiChatMessage message)
     {
         Dispatcher.UIThread.Post(() => AddBubble(message));
@@ -409,7 +516,13 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             _bubbles.Clear();
             _bubbleBorders.Clear();
             _panMessages.Children.Clear();
-            ShowWelcome();
+            if (AiChatService.Instance.Messages.Count == 0)
+            {
+                ShowWelcome();
+                return;
+            }
+
+            RenderExistingHistory();
         });
     }
 

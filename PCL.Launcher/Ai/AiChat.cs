@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using PCL.Core.App;
+using PCL.Core.App.Localization;
 using PCL.Core.Logging;
 using PCL.Navigation;
 
@@ -50,7 +51,7 @@ public sealed class AiChatMessage
     /// <summary>助手消息中请求的工具调用。</summary>
     public List<AiToolCall> ToolCalls { get; } = [];
 
-    public DateTime CreatedAt { get; } = DateTime.Now;
+    public DateTime CreatedAt { get; init; } = DateTime.Now;
 }
 
 /// <summary>
@@ -72,9 +73,17 @@ public sealed class AiChatService
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Lock _messageLock = new();
-    private readonly List<AiChatMessage> _messages = [];
+    private readonly List<AiConversation> _conversations = [];
+    private List<AiChatMessage> _messages = [];
+    private AiConversation _current = new();
+    private bool _conversationsLoaded;
 
     private CancellationTokenSource? _cts;
+
+    private AiChatService()
+    {
+        LoadConversations();
+    }
 
     public static AiChatService Instance => LazyInstance.Value;
 
@@ -88,6 +97,12 @@ public sealed class AiChatService
 
     public event Action<string?>? StatusChanged;
 
+    /// <summary>会话列表发生变化（新建、删除、标题更新）。</summary>
+    public event Action? ConversationsChanged;
+
+    /// <summary>当前会话被切换或重建，界面需要重新渲染消息。</summary>
+    public event Action? ConversationSwitched;
+
     public bool IsBusy { get; private set; }
 
     /// <summary>当前对话快照，可在任意线程安全读取。</summary>
@@ -99,6 +114,18 @@ public sealed class AiChatService
                 return _messages.ToArray();
         }
     }
+
+    /// <summary>全部会话快照，按最近使用时间倒序。</summary>
+    public IReadOnlyList<AiConversation> Conversations
+    {
+        get
+        {
+            lock (_messageLock)
+                return _conversations.OrderByDescending(item => item.UpdatedAt).ToArray();
+        }
+    }
+
+    public AiConversation CurrentConversation => _current;
 
     /// <summary>最近一次崩溃报告，可被工具读取。</summary>
     public string? LastCrashReport { get; private set; }
@@ -121,12 +148,299 @@ public sealed class AiChatService
 
     public string? LastError { get; private set; }
 
+    /// <summary>新建会话并切换过去。</summary>
+    public void NewConversation()
+    {
+        if (IsBusy) Cancel();
+        SaveConversations();
+
+        var conversation = new AiConversation();
+        lock (_messageLock)
+        {
+            _conversations.Insert(0, conversation);
+            _current = conversation;
+            _messages = conversation.Messages;
+        }
+
+        TrimConversations();
+        SaveConversations();
+        ConversationsChanged?.Invoke();
+        ConversationSwitched?.Invoke();
+    }
+
+    /// <summary>切换到指定会话。</summary>
+    public void SelectConversation(string id)
+    {
+        if (IsBusy) Cancel();
+
+        AiConversation? target;
+        lock (_messageLock)
+        {
+            target = _conversations.FirstOrDefault(item => item.Id == id);
+            if (target is null || ReferenceEquals(target, _current))
+                return;
+            _current = target;
+            _messages = target.Messages;
+        }
+
+        _current.UpdatedAt = DateTime.Now;
+        SaveConversations();
+        ConversationsChanged?.Invoke();
+        ConversationSwitched?.Invoke();
+    }
+
+    /// <summary>删除会话；若删除的是当前会话，则切换到最近的其它会话。</summary>
+    public void DeleteConversation(string id)
+    {
+        if (IsBusy) Cancel();
+
+        lock (_messageLock)
+        {
+            var target = _conversations.FirstOrDefault(item => item.Id == id);
+            if (target is null)
+                return;
+            _conversations.Remove(target);
+            if (ReferenceEquals(target, _current))
+            {
+                if (_conversations.Count == 0)
+                    _conversations.Add(new AiConversation());
+                _current = _conversations.OrderByDescending(item => item.UpdatedAt).First();
+                _messages = _current.Messages;
+            }
+        }
+
+        SaveConversations();
+        ConversationsChanged?.Invoke();
+        ConversationSwitched?.Invoke();
+    }
+
+    /// <summary>手动把当前会话压缩成摘要，只保留最近两条消息。</summary>
+    public async Task CompressAsync()
+    {
+        if (!IsConfigured)
+        {
+            AddMessage(new AiChatMessage
+            {
+                Role = AiRole.Assistant,
+                Content = "还没有配置 API Key。请点击左下角的“设置 → AI 接入”完成接入。",
+                IsError = true
+            });
+            return;
+        }
+
+        if (IsBusy)
+        {
+            AddMessage(new AiChatMessage
+            {
+                Role = AiRole.Assistant,
+                Content = Lang.Text("Launch.Ai.Compress.Busy"),
+                IsError = true
+            });
+            return;
+        }
+
+        await _gate.WaitAsync();
+        try
+        {
+            IsBusy = true;
+            BusyChanged?.Invoke(true);
+            LastError = null;
+            using var cts = new CancellationTokenSource();
+            _cts = cts;
+            StatusChanged?.Invoke("正在压缩上下文…");
+            var compressed = await CompressCoreAsync(cts.Token, 2);
+            AddMessage(new AiChatMessage
+            {
+                Role = AiRole.Assistant,
+                Content = compressed
+                    ? Lang.Text("Launch.Ai.Compressed")
+                    : Lang.Text("Launch.Ai.Compress.TooShort")
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            AddMessage(new AiChatMessage
+            {
+                Role = AiRole.Assistant,
+                Content = "已取消本次压缩。",
+                IsError = true
+            });
+        }
+        catch (Exception ex)
+        {
+            LastError = ex.Message;
+            LogWrapper.Error(ex, "Ai", "压缩上下文失败");
+            AddMessage(new AiChatMessage
+            {
+                Role = AiRole.Assistant,
+                Content = "压缩上下文失败：" + ex.Message,
+                IsError = true
+            });
+        }
+        finally
+        {
+            _cts = null;
+            IsBusy = false;
+            StatusChanged?.Invoke(null);
+            BusyChanged?.Invoke(false);
+            SaveConversations();
+            _gate.Release();
+        }
+    }
+
+    /// <summary>把较早的消息交给模型生成摘要，替换成一条隐藏的系统消息。</summary>
+    private async Task<bool> CompressCoreAsync(CancellationToken ct, int keepRecent)
+    {
+        List<AiChatMessage> snapshot;
+        lock (_messageLock)
+            snapshot = _messages
+                .Where(message => !message.IsHidden
+                                  && !string.IsNullOrWhiteSpace(message.Content)
+                                  && message.Role is AiRole.User or AiRole.Assistant)
+                .ToList();
+
+        if (snapshot.Count < 4)
+            return false;
+
+        var compressible = snapshot.Take(snapshot.Count - keepRecent).ToList();
+        if (compressible.Count < 2)
+            return false;
+
+        var transcript = string.Join(
+            "\n",
+            compressible.Select(message =>
+                $"{(message.Role == AiRole.User ? "用户" : "助手")}：{Truncate(message.Content, 4000)}"));
+        var summary = await CompleteOnceAsync(
+            "你是上下文压缩器。把下面的对话压缩成不超过 600 字的中文摘要，保留用户目标、关键决定、已执行的操作、结果与未完成事项。只输出摘要，不要寒暄。",
+            transcript,
+            ct);
+        if (string.IsNullOrWhiteSpace(summary))
+            return false;
+
+        lock (_messageLock)
+        {
+            var recent = snapshot
+                .Skip(Math.Max(0, snapshot.Count - keepRecent))
+                .ToList();
+            _messages.Clear();
+            _messages.Add(new AiChatMessage
+            {
+                Role = AiRole.System,
+                Content = "【历史对话摘要】\n" + summary.Trim(),
+                IsHidden = true
+            });
+            foreach (var message in recent)
+                _messages.Add(message);
+        }
+
+        _current.Summary = summary.Trim();
+        _current.UpdatedAt = DateTime.Now;
+        SaveConversations();
+        HistoryCleared?.Invoke();
+        return true;
+    }
+
+    /// <summary>上下文超过阈值时自动压缩。</summary>
+    private async Task AutoCompressIfNeededAsync(CancellationToken ct)
+    {
+        bool enabled;
+        int threshold;
+        try
+        {
+            enabled = Config.Ai.AutoCompress;
+            threshold = Math.Max(4000, Config.Ai.CompressThreshold);
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        if (!enabled)
+            return;
+
+        int chars;
+        lock (_messageLock)
+            chars = _messages
+                .Where(message => !message.IsHidden)
+                .Sum(message => message.Content.Length);
+        if (chars < threshold)
+            return;
+
+        StatusChanged?.Invoke("上下文较长，正在压缩…");
+        var compressed = await CompressCoreAsync(ct, 4);
+        if (compressed)
+            AddMessage(new AiChatMessage
+            {
+                Role = AiRole.Assistant,
+                Content = Lang.Text("Launch.Ai.Compressed")
+            });
+    }
+
+    /// <summary>一次性、非流式地完成一次请求，供上下文压缩使用。</summary>
+    private async Task<string> CompleteOnceAsync(
+        string systemPrompt,
+        string userContent,
+        CancellationToken ct)
+    {
+        var payload = new JsonObject
+        {
+            ["model"] = string.IsNullOrWhiteSpace(Config.Ai.Model)
+                ? "deepseek-chat"
+                : Config.Ai.Model.Trim(),
+            ["messages"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["role"] = "system",
+                    ["content"] = systemPrompt
+                },
+                new JsonObject
+                {
+                    ["role"] = "user",
+                    ["content"] = userContent
+                }
+            },
+            ["stream"] = false,
+            ["temperature"] = 0.2,
+            ["max_tokens"] = 900
+        };
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            ResolveEndpoint(Config.Ai.BaseUrl))
+        {
+            Content = new StringContent(
+                payload.ToJsonString(),
+                Encoding.UTF8,
+                "application/json")
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            Config.Ai.ApiKey.Trim());
+        using var response = await _http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            throw new InvalidOperationException(
+                $"接口返回 {(int)response.StatusCode}：{Truncate(body, 300)}");
+        }
+
+        var json = await response.Content.ReadAsStringAsync(ct);
+        var node = JsonNode.Parse(json);
+        return node?["choices"]?[0]?["message"]?["content"]?.ToString()?.Trim() ?? "";
+    }
+
     public void Clear()
     {
         if (IsBusy) Cancel();
         lock (_messageLock)
             _messages.Clear();
+        _current.Title = "";
+        _current.Summary = null;
+        _current.UpdatedAt = DateTime.Now;
         LastError = null;
+        SaveConversations();
+        ConversationsChanged?.Invoke();
         HistoryCleared?.Invoke();
     }
 
@@ -211,15 +525,19 @@ public sealed class AiChatService
             BusyChanged?.Invoke(true);
             LastError = null;
 
+            using var cts = new CancellationTokenSource();
+            _cts = cts;
+
+            await AutoCompressIfNeededAsync(cts.Token);
+
             AddMessage(new AiChatMessage
             {
                 Role = AiRole.User,
                 Content = text
             });
+            UpdateConversationTitle(text);
             TrimHistory();
 
-            using var cts = new CancellationTokenSource();
-            _cts = cts;
             await RunToolLoopAsync(cts.Token);
         }
         catch (OperationCanceledException)
@@ -248,8 +566,22 @@ public sealed class AiChatService
             IsBusy = false;
             StatusChanged?.Invoke(null);
             BusyChanged?.Invoke(false);
+            SaveConversations();
             _gate.Release();
         }
+    }
+
+    private void UpdateConversationTitle(string text)
+    {
+        _current.UpdatedAt = DateTime.Now;
+        if (!string.IsNullOrWhiteSpace(_current.Title))
+            return;
+
+        var title = text.ReplaceLineEndings(" ").Trim();
+        if (title.Length > 24)
+            title = title[..24] + "…";
+        _current.Title = title;
+        ConversationsChanged?.Invoke();
     }
 
     private async Task RunToolLoopAsync(CancellationToken ct)
@@ -572,9 +904,66 @@ public sealed class AiChatService
         MessageUpdated?.Invoke(message);
     }
 
+    private void LoadConversations()
+    {
+        if (_conversationsLoaded)
+            return;
+        _conversationsLoaded = true;
+
+        try
+        {
+            var (list, currentId) = AiConversationStore.Load();
+            _conversations.AddRange(list);
+            if (_conversations.Count == 0)
+                _conversations.Add(new AiConversation());
+            _current = _conversations.FirstOrDefault(item => item.Id == currentId)
+                       ?? _conversations.OrderByDescending(item => item.UpdatedAt).First();
+        }
+        catch (Exception ex)
+        {
+            LogWrapper.Warn("Ai", "初始化会话列表失败：" + ex.Message);
+            _conversations.Clear();
+            _conversations.Add(new AiConversation());
+            _current = _conversations[0];
+        }
+
+        lock (_messageLock)
+            _messages = _current.Messages;
+    }
+
+    private void SaveConversations()
+    {
+        List<AiConversation> snapshot;
+        string currentId;
+        lock (_messageLock)
+        {
+            snapshot = _conversations.ToList();
+            currentId = _current.Id;
+        }
+
+        AiConversationStore.Save(snapshot, currentId);
+    }
+
+    private void TrimConversations()
+    {
+        lock (_messageLock)
+        {
+            while (_conversations.Count > 40)
+            {
+                var removable = _conversations
+                    .Where(item => !ReferenceEquals(item, _current))
+                    .OrderBy(item => item.UpdatedAt)
+                    .FirstOrDefault();
+                if (removable is null)
+                    break;
+                _conversations.Remove(removable);
+            }
+        }
+    }
+
     private void TrimHistory()
     {
-        var limit = Math.Max(8, Config.Ai.HistoryLimit);
+        var limit = Math.Max(120, Config.Ai.HistoryLimit);
         lock (_messageLock)
         {
             while (_messages.Count > limit)

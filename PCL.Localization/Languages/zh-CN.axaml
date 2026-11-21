@@ -3772,4 +3772,13 @@
     <sys:String x:Key="Setup.About.Maintainer.Name">aodianjun</sys:String>
     <sys:String x:Key="Setup.About.Maintainer.Info">PCL CE-AI 维护者 · 本构建作者</sys:String>
     <sys:String x:Key="Setup.About.Maintainer.GitHub">GitHub</sys:String>
+    <sys:String x:Key="Launch.Ai.NewChat">新建对话</sys:String>
+    <sys:String x:Key="Launch.Ai.NewChat.DefaultTitle">新对话</sys:String>
+    <sys:String x:Key="Launch.Ai.Conversations">对话列表</sys:String>
+    <sys:String x:Key="Launch.Ai.Conversations.Title">对话列表</sys:String>
+    <sys:String x:Key="Launch.Ai.Conversations.Empty">暂无历史对话</sys:String>
+    <sys:String x:Key="Launch.Ai.Compress">压缩上下文</sys:String>
+    <sys:String x:Key="Launch.Ai.Compressed">上下文已压缩，之后会基于摘要继续。</sys:String>
+    <sys:String x:Key="Launch.Ai.Compress.Busy">正在回复中，请稍后再压缩。</sys:String>
+    <sys:String x:Key="Launch.Ai.Compress.TooShort">当前对话内容较少，不需要压缩。</sys:String>
 </ResourceDictionary>

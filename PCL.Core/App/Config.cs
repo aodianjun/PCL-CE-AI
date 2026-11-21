@@ -644,6 +644,12 @@ public static partial class Config
         /// <summary>保留的历史消息条数。</summary>
         [ConfigItem<int>("AiHistoryLimit", 40, ConfigSource.Local)] public partial int HistoryLimit { get; set; }
 
+        /// <summary>上下文过长时自动压缩为摘要。</summary>
+        [ConfigItem<bool>("AiAutoCompress", true, ConfigSource.Local)] public partial bool AutoCompress { get; set; }
+
+        /// <summary>触发自动压缩的字符数阈值。</summary>
+        [ConfigItem<int>("AiCompressThreshold", 16000, ConfigSource.Local)] public partial int CompressThreshold { get; set; }
+
         /// <summary>系统提示词附加内容。</summary>
         [ConfigItem<string>("AiSystemPromptExtra", "", ConfigSource.Local)] public partial string SystemPromptExtra { get; set; }
     }
