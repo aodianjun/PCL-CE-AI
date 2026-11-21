@@ -47,6 +47,38 @@
                                       HintText="sk-..." />
                     </Grid>
 
+                    <Grid Margin="0,10,0,4"
+                          ColumnDefinitions="Auto,20,*,Auto">
+                        <TextBlock VerticalAlignment="Center"
+                                   Text="{loc:Loc Setup.Ai.ModelList}" />
+                        <ui:MyComboBox x:Name="ComboModels"
+                                       Grid.Column="2"
+                                       Height="32"
+                                       IsVisible="False" />
+                        <ui:MyButton x:Name="BtnFetchModels"
+                                     Grid.Column="3"
+                                     Height="32"
+                                     MinWidth="120"
+                                     Margin="8,0,0,0"
+                                     Text="{loc:Loc Setup.Ai.FetchModels}" />
+                    </Grid>
+                    <Grid Margin="0,4,0,6"
+                          ColumnDefinitions="Auto,20,*"
+                          RowDefinitions="Auto,8,Auto">
+                        <TextBlock VerticalAlignment="Center"
+                                   Text="{loc:Loc Setup.Ai.ContextLimit}" />
+                        <ui:MyTextBox x:Name="TxtContextLimit"
+                                      Grid.Column="2"
+                                      Height="32" />
+                        <TextBlock Grid.Row="2"
+                                   VerticalAlignment="Center"
+                                   Text="{loc:Loc Setup.Ai.MaxOutput}" />
+                        <ui:MyTextBox x:Name="TxtMaxOutput"
+                                      Grid.Row="2"
+                                      Grid.Column="2"
+                                      Height="32" />
+                    </Grid>
+
                     <ui:MyCheckBox x:Name="ChkEnableTools"
                                    Height="24"
                                    Margin="-1,6,0,4"

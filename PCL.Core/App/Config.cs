@@ -650,6 +650,12 @@ public static partial class Config
         /// <summary>触发自动压缩的字符数阈值。</summary>
         [ConfigItem<int>("AiCompressThreshold", 16000, ConfigSource.Local)] public partial int CompressThreshold { get; set; }
 
+        /// <summary>模型上下文上限（tokens），用于显示用量；拉取模型列表时可自动填写。</summary>
+        [ConfigItem<int>("AiContextLimit", 64000, ConfigSource.Local)] public partial int ContextLimit { get; set; }
+
+        /// <summary>单次回复最大输出 tokens。</summary>
+        [ConfigItem<int>("AiMaxOutputTokens", 4096, ConfigSource.Local)] public partial int MaxOutputTokens { get; set; }
+
         /// <summary>系统提示词附加内容。</summary>
         [ConfigItem<string>("AiSystemPromptExtra", "", ConfigSource.Local)] public partial string SystemPromptExtra { get; set; }
     }

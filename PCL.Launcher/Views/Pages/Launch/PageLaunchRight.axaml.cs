@@ -11,6 +11,7 @@ using PCL.Core.App;
 using PCL.Core.App.Localization;
 using PCL.Core.Logging;
 using PCL.Core.Minecraft.Profile;
+using PCL.Core.UI.Dialogs;
 using PCL.Navigation;
 using PCL.UI.Controls;
 
@@ -39,6 +40,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
     private readonly MyIconButton _btnSend;
     private readonly MyIconButton _btnCancelReply;
     private readonly TextBlock _labModel;
+    private readonly TextBlock _labContextUsage;
     private readonly TextBlock _labLaunchingStage;
     private readonly ProgressBar _barLaunch;
     private readonly Grid _panDrawerLayer;
@@ -67,6 +69,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         _btnSend = this.FindControl<MyIconButton>("BtnSend")!;
         _btnCancelReply = this.FindControl<MyIconButton>("BtnCancelReply")!;
         _labModel = this.FindControl<TextBlock>("LabModel")!;
+        _labContextUsage = this.FindControl<TextBlock>("LabContextUsage")!;
         _labLaunchingStage = this.FindControl<TextBlock>("LabLaunchingStage")!;
         _barLaunch = this.FindControl<ProgressBar>("BarLaunch")!;
         _panDrawerLayer = this.FindControl<Grid>("PanDrawerLayer")!;
@@ -96,6 +99,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         Unloaded += OnUnloaded;
 
         RefreshModelLabel(null);
+        RefreshContextUsage();
         RenderExistingHistory();
         UpdateSendState();
     }
@@ -159,6 +163,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             AiChatService.Instance.StatusChanged += OnAiStatusChanged;
             AiChatService.Instance.ConversationsChanged += OnConversationsChanged;
             AiChatService.Instance.ConversationSwitched += OnConversationSwitched;
+            AiChatService.Instance.ContextUsageChanged += OnContextUsageChanged;
         }
 
         AttachLaunchController();
@@ -186,6 +191,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             AiChatService.Instance.StatusChanged -= OnAiStatusChanged;
             AiChatService.Instance.ConversationsChanged -= OnConversationsChanged;
             AiChatService.Instance.ConversationSwitched -= OnConversationSwitched;
+            AiChatService.Instance.ContextUsageChanged -= OnContextUsageChanged;
         }
 
         if (_viewModel is not null)
@@ -489,6 +495,71 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
                 ShowWelcome();
             else
                 RenderExistingHistory();
+        });
+    }
+
+    private void OnContextUsageChanged()
+    {
+        Dispatcher.UIThread.Post(RefreshContextUsage);
+    }
+
+    private void RefreshContextUsage()
+    {
+        try
+        {
+            var usage = AiChatService.Instance.GetContextUsage();
+            _labContextUsage.Text = Lang.Text(
+                "Launch.Ai.Context.Short",
+                FormatTokenCount(usage.EstimatedTokens),
+                FormatTokenCount(usage.Limit),
+                usage.Percent.ToString("0"));
+        }
+        catch (Exception)
+        {
+            _labContextUsage.Text = "";
+        }
+    }
+
+    private static string FormatTokenCount(int value)
+    {
+        return value >= 1000
+            ? (value / 1000d).ToString("0.#") + "k"
+            : value.ToString();
+    }
+
+    private void ContextUsage_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+
+        var usage = AiChatService.Instance.GetContextUsage();
+        var threshold = 16000;
+        try
+        {
+            threshold = Config.Ai.CompressThreshold;
+        }
+        catch (Exception)
+        {
+            // 忽略配置读取失败。
+        }
+
+        var content = string.Join(
+            Environment.NewLine,
+            Lang.Text("Launch.Ai.Context.MessageCount", usage.MessageCount),
+            Lang.Text("Launch.Ai.Context.Characters", usage.Characters),
+            Lang.Text("Launch.Ai.Context.EstimatedTokens", usage.EstimatedTokens),
+            Lang.Text("Launch.Ai.Context.Limit", usage.Limit),
+            Lang.Text("Launch.Ai.Context.Percent", usage.Percent.ToString("0.0")),
+            Lang.Text("Launch.Ai.Context.Threshold", threshold),
+            Lang.Text(
+                "Launch.Ai.Context.HasSummary",
+                usage.HasSummary ? Lang.Text("Common.Option.Yes") : Lang.Text("Common.Option.No")));
+
+        _ = DialogService.Instance.ShowAsync(new TextDialogRequest
+        {
+            Title = Lang.Text("Launch.Ai.Context.Title"),
+            Content = content,
+            Buttons = DialogButtons.Ok
         });
     }
 

@@ -108,4 +108,21 @@
     <sys:String x:Key="Launch.Ai.Compressed">Context compressed; continuing from the summary.</sys:String>
     <sys:String x:Key="Launch.Ai.Compress.Busy">A reply is in progress; try compressing later.</sys:String>
     <sys:String x:Key="Launch.Ai.Compress.TooShort">This conversation is too short to compress.</sys:String>
+    <sys:String x:Key="Setup.Ai.ModelList">Model list</sys:String>
+    <sys:String x:Key="Setup.Ai.FetchModels">Fetch models</sys:String>
+    <sys:String x:Key="Setup.Ai.Models.Fetching">Fetching model list...</sys:String>
+    <sys:String x:Key="Setup.Ai.Models.Fetched">Fetched {0} models</sys:String>
+    <sys:String x:Key="Setup.Ai.Models.Failed">Fetch failed: {0}</sys:String>
+    <sys:String x:Key="Setup.Ai.ContextLimit">Context limit (tokens)</sys:String>
+    <sys:String x:Key="Setup.Ai.MaxOutput">Max output (tokens)</sys:String>
+    <sys:String x:Key="Setup.Ai.Params.AutoFilled">Parameters filled from the selected model</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Short">Context {0} / {1} · {2}%</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Title">Context usage</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.MessageCount">Messages: {0}</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Characters">Characters: {0}</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.EstimatedTokens">Estimated tokens: {0}</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Limit">Context limit: {0} tokens</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Percent">Used: {0}%</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Threshold">Compression threshold: {0} characters</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.HasSummary">Has summary: {0}</sys:String>
 </ResourceDictionary>

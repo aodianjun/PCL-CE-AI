@@ -73,6 +73,12 @@
                                    FontSize="11"
                                    Opacity="0.7" />
                     </Border>
+                    <TextBlock x:Name="LabContextUsage"
+                               VerticalAlignment="Center"
+                               FontSize="11"
+                               Opacity="0.6"
+                               PointerPressed="ContextUsage_OnPointerPressed"
+                               ToolTip.Tip="{loc:Loc Launch.Ai.Context.Title}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1"
                             Orientation="Horizontal"

@@ -54,6 +54,15 @@ public sealed class AiChatMessage
     public DateTime CreatedAt { get; init; } = DateTime.Now;
 }
 
+/// <summary>当前会话的上下文用量快照。</summary>
+public sealed record AiContextUsage(
+    int MessageCount,
+    int Characters,
+    int EstimatedTokens,
+    int Limit,
+    double Percent,
+    bool HasSummary);
+
 /// <summary>
 /// DeepSeek harness：兼容 OpenAI Chat Completions 的会话服务。
 /// 负责流式对话、工具调用循环、历史裁剪，以及把崩溃报告自动交给模型分析。
@@ -103,6 +112,9 @@ public sealed class AiChatService
     /// <summary>当前会话被切换或重建，界面需要重新渲染消息。</summary>
     public event Action? ConversationSwitched;
 
+    /// <summary>上下文用量发生变化。</summary>
+    public event Action? ContextUsageChanged;
+
     public bool IsBusy { get; private set; }
 
     /// <summary>当前对话快照，可在任意线程安全读取。</summary>
@@ -148,6 +160,47 @@ public sealed class AiChatService
 
     public string? LastError { get; private set; }
 
+    /// <summary>计算当前会话的上下文用量（字符数 + 粗略 token 估算）。</summary>
+    public AiContextUsage GetContextUsage()
+    {
+        List<AiChatMessage> snapshot;
+        int chars = 0;
+        int ascii = 0;
+        int nonAscii = 0;
+        bool hasSummary;
+        lock (_messageLock)
+        {
+            snapshot = _messages.ToList();
+            hasSummary = !string.IsNullOrWhiteSpace(_current.Summary);
+        }
+
+        foreach (var message in snapshot)
+        {
+            var content = message.Content ?? "";
+            chars += content.Length;
+            foreach (var ch in content)
+                if (ch < 128)
+                    ascii++;
+                else
+                    nonAscii++;
+        }
+
+        int limit;
+        try
+        {
+            limit = Math.Max(4000, Config.Ai.ContextLimit);
+        }
+        catch (Exception)
+        {
+            limit = 64000;
+        }
+
+        // 粗略估算：英文约 4 字符 1 token，中文约 1 字符 1 token。
+        var tokens = (int)Math.Ceiling(ascii / 4.0 + nonAscii);
+        var percent = limit > 0 ? Math.Min(100d, tokens * 100d / limit) : 0d;
+        return new AiContextUsage(snapshot.Count, chars, tokens, limit, percent, hasSummary);
+    }
+
     /// <summary>新建会话并切换过去。</summary>
     public void NewConversation()
     {
@@ -166,6 +219,7 @@ public sealed class AiChatService
         SaveConversations();
         ConversationsChanged?.Invoke();
         ConversationSwitched?.Invoke();
+        ContextUsageChanged?.Invoke();
     }
 
     /// <summary>切换到指定会话。</summary>
@@ -187,6 +241,7 @@ public sealed class AiChatService
         SaveConversations();
         ConversationsChanged?.Invoke();
         ConversationSwitched?.Invoke();
+        ContextUsageChanged?.Invoke();
     }
 
     /// <summary>删除会话；若删除的是当前会话，则切换到最近的其它会话。</summary>
@@ -212,6 +267,7 @@ public sealed class AiChatService
         SaveConversations();
         ConversationsChanged?.Invoke();
         ConversationSwitched?.Invoke();
+        ContextUsageChanged?.Invoke();
     }
 
     /// <summary>手动把当前会话压缩成摘要，只保留最近两条消息。</summary>
@@ -284,6 +340,7 @@ public sealed class AiChatService
             StatusChanged?.Invoke(null);
             BusyChanged?.Invoke(false);
             SaveConversations();
+            ContextUsageChanged?.Invoke();
             _gate.Release();
         }
     }
@@ -442,6 +499,7 @@ public sealed class AiChatService
         SaveConversations();
         ConversationsChanged?.Invoke();
         HistoryCleared?.Invoke();
+        ContextUsageChanged?.Invoke();
     }
 
     public void Cancel()
@@ -567,6 +625,7 @@ public sealed class AiChatService
             StatusChanged?.Invoke(null);
             BusyChanged?.Invoke(false);
             SaveConversations();
+            ContextUsageChanged?.Invoke();
             _gate.Release();
         }
     }
@@ -860,6 +919,17 @@ public sealed class AiChatService
             ["temperature"] = 0.3
         };
 
+        try
+        {
+            var maxOutput = Config.Ai.MaxOutputTokens;
+            if (maxOutput > 0)
+                payload["max_tokens"] = maxOutput;
+        }
+        catch (Exception)
+        {
+            // 配置未就绪时忽略。
+        }
+
         if (Config.Ai.EnableTools)
             payload["tools"] = AiTools.BuildDefinitions();
 
@@ -897,6 +967,7 @@ public sealed class AiChatService
         lock (_messageLock)
             _messages.Add(message);
         MessageAdded?.Invoke(message);
+        ContextUsageChanged?.Invoke();
     }
 
     private void NotifyUpdated(AiChatMessage message)
@@ -977,6 +1048,18 @@ public sealed class AiChatService
                     _messages.RemoveAt(0);
             }
         }
+    }
+
+    /// <summary>把用户填写的基址补全为 /models 完整地址。</summary>
+    public static string ResolveModelsEndpoint(string baseUrl)
+    {
+        var value = (baseUrl ?? "").Trim().TrimEnd('/');
+        if (value.Length == 0)
+            value = "https://api.deepseek.com";
+        const string completions = "/chat/completions";
+        if (value.EndsWith(completions, StringComparison.OrdinalIgnoreCase))
+            value = value[..^completions.Length];
+        return value + "/models";
     }
 
     /// <summary>把用户填写的基址补全为 chat/completions 完整地址。</summary>

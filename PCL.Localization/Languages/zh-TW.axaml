@@ -3772,4 +3772,21 @@
     <sys:String x:Key="Launch.Ai.Compressed">上下文已壓縮，之後會以摘要繼續。</sys:String>
     <sys:String x:Key="Launch.Ai.Compress.Busy">正在回覆中，請稍後再壓縮。</sys:String>
     <sys:String x:Key="Launch.Ai.Compress.TooShort">目前對話內容較少，不需要壓縮。</sys:String>
+    <sys:String x:Key="Setup.Ai.ModelList">模型清單</sys:String>
+    <sys:String x:Key="Setup.Ai.FetchModels">取得模型清單</sys:String>
+    <sys:String x:Key="Setup.Ai.Models.Fetching">正在取得模型清單…</sys:String>
+    <sys:String x:Key="Setup.Ai.Models.Fetched">已取得 {0} 個模型</sys:String>
+    <sys:String x:Key="Setup.Ai.Models.Failed">取得失敗：{0}</sys:String>
+    <sys:String x:Key="Setup.Ai.ContextLimit">上下文上限 (tokens)</sys:String>
+    <sys:String x:Key="Setup.Ai.MaxOutput">最大輸出 (tokens)</sys:String>
+    <sys:String x:Key="Setup.Ai.Params.AutoFilled">已依模型自動填入參數</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Short">上下文 {0} / {1} · {2}%</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Title">上下文用量</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.MessageCount">訊息：{0} 則</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Characters">字元：{0}</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.EstimatedTokens">估算 tokens：{0}</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Limit">上下文上限：{0} tokens</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Percent">已用：{0}%</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Threshold">壓縮閾值：{0} 字元</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.HasSummary">已有摘要：{0}</sys:String>
 </ResourceDictionary>
