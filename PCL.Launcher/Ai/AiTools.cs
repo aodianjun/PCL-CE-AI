@@ -5,6 +5,7 @@ using PCL.Core.App;
 using PCL.Core.Logging;
 using PCL.Core.Minecraft.Profile;
 using PCL.Navigation;
+using PCL.UI.Install;
 using PCL.Views.Pages.Download;
 
 namespace PCL.Ai;
@@ -190,7 +191,37 @@ public static class AiTools
                 new JsonObject
                 {
                     ["path"] = Str("可选，要打开的目录；留空表示工作目录")
-                })
+                }),
+            Tool(
+                "download_minecraft",
+                "下载并安装 Minecraft 版本。支持原版和 Fabric；Forge/NeoForge 请引导用户用安装页。安装会在后台进行。",
+                new JsonObject
+                {
+                    ["version"] = Str("Minecraft 版本号，例如 1.21.1"),
+                    ["loader"] = Str("可选：vanilla（默认）或 fabric"),
+                    ["instance_name"] = Str("可选，实例名称，默认使用版本号；Fabric 默认加 -Fabric 后缀"),
+                    ["overwrite"] = Bool("实例已存在时是否覆盖，默认 false")
+                },
+                Required("version")),
+            Tool(
+                "get_install_status",
+                "查看由 AI 触发的下载安装任务进度。",
+                new JsonObject
+                {
+                    ["instance_name"] = Str("可选，只查看指定实例")
+                }),
+            Tool(
+                "download_mod",
+                "从 Modrinth 搜索并下载 Mod 到当前实例的 mods 文件夹。",
+                new JsonObject
+                {
+                    ["query"] = Str("搜索关键词或 Mod 名称"),
+                    ["game_version"] = Str("可选，默认读取当前实例的游戏版本"),
+                    ["loader"] = Str("可选：fabric、forge、neoforge、quilt，默认按当前实例判断"),
+                    ["instance"] = Str("可选，目标实例名称，默认当前实例"),
+                    ["enable"] = Bool("下载后是否启用，默认 true")
+                },
+                Required("query"))
         );
     }
 
@@ -241,6 +272,20 @@ public static class AiTools
                     GetString(args, "query"),
                     GetString(args, "path")),
                 "open_folder" => OpenFolder(GetString(args, "path")),
+                "download_minecraft" => await DownloadMinecraftAsync(
+                    GetString(args, "version"),
+                    GetString(args, "loader"),
+                    GetString(args, "instance_name"),
+                    GetBool(args, "overwrite"),
+                    ct),
+                "get_install_status" => GetInstallStatus(GetString(args, "instance_name")),
+                "download_mod" => await DownloadModAsync(
+                    GetString(args, "query"),
+                    GetString(args, "game_version"),
+                    GetString(args, "loader"),
+                    GetString(args, "instance"),
+                    GetBool(args, "enable"),
+                    ct),
                 _ => $"未知工具：{call.Name}"
             };
         }
@@ -1018,6 +1063,284 @@ public static class AiTools
 
         Dispatcher.UIThread.Post(() => Basics.OpenPath(directory));
         return "已在资源管理器中打开：" + directory;
+    }
+
+    private static readonly HttpClient DownloadHttp = new()
+    {
+        Timeout = TimeSpan.FromSeconds(60)
+    };
+
+    private static JsonObject? _versionManifest;
+    private static DateTime _versionManifestAt;
+
+    private static async Task<JsonObject> GetVersionManifestAsync(CancellationToken ct)
+    {
+        if (_versionManifest is not null
+            && DateTime.UtcNow - _versionManifestAt < TimeSpan.FromMinutes(10))
+            return _versionManifest;
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json");
+        request.Headers.UserAgent.ParseAdd("PCL-CE-AI");
+        using var response = await DownloadHttp.SendAsync(request, ct);
+        response.EnsureSuccessStatusCode();
+        var json = JsonNode.Parse(await response.Content.ReadAsStringAsync(ct)) as JsonObject
+                   ?? throw new InvalidOperationException("版本清单为空。");
+        _versionManifest = json;
+        _versionManifestAt = DateTime.UtcNow;
+        return json;
+    }
+
+    private static async Task<string?> GetLatestFabricLoaderAsync(
+        string gameVersion,
+        CancellationToken ct)
+    {
+        using var response = await DownloadHttp.GetAsync(
+            "https://meta.fabricmc.net/v2/versions/loader/"
+            + Uri.EscapeDataString(gameVersion),
+            ct);
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        var array = JsonNode.Parse(await response.Content.ReadAsStringAsync(ct)) as JsonArray;
+        var entry = array?.OfType<JsonObject>().FirstOrDefault(item =>
+                        item["loader"]?["stable"]?.GetValue<bool>() is true)
+                    ?? array?.OfType<JsonObject>().FirstOrDefault();
+        return entry?["loader"]?["version"]?.ToString();
+    }
+
+    private static async Task<string> DownloadMinecraftAsync(
+        string? version,
+        string? loader,
+        string? instanceName,
+        bool overwrite,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+            return "缺少参数 version。";
+
+        var manifest = await GetVersionManifestAsync(ct);
+        var entry = (manifest["versions"] as JsonArray)?
+            .OfType<JsonObject>()
+            .FirstOrDefault(item => string.Equals(
+                item["id"]?.ToString(),
+                version.Trim(),
+                StringComparison.OrdinalIgnoreCase));
+        if (entry is null)
+            return $"没有找到 Minecraft 版本“{version}”。";
+
+        var id = entry["id"]?.ToString() ?? "";
+        var jsonUrl = entry["url"]?.ToString() ?? "";
+        var normalizedLoader = (loader ?? "").Trim().ToLowerInvariant();
+        string? fabricVersion = null;
+        if (normalizedLoader == "fabric")
+        {
+            fabricVersion = await GetLatestFabricLoaderAsync(id, ct);
+            if (string.IsNullOrWhiteSpace(fabricVersion))
+                return "获取 Fabric Loader 版本失败，请稍后再试或用安装页。";
+        }
+        else if (normalizedLoader is not ("" or "vanilla" or "原版"))
+        {
+            return $"暂不支持通过 AI 直接安装 {loader}；请让用户到安装页选择 Forge/NeoForge。";
+        }
+
+        var name = string.IsNullOrWhiteSpace(instanceName)
+            ? id + (normalizedLoader == "fabric" ? "-Fabric" : "")
+            : instanceName.Trim();
+        if (!LauncherCommon.IsValidInstanceName(name))
+            return "实例名称不合法。";
+
+        var minecraftFolder = GameFolders.mcFolderSelected;
+        if (string.IsNullOrWhiteSpace(minecraftFolder))
+            minecraftFolder = LauncherPaths.MinecraftFolder;
+        if (string.IsNullOrWhiteSpace(minecraftFolder))
+            return "没有找到 Minecraft 文件夹。";
+
+        var instanceFolder = Path.Combine(minecraftFolder, "versions", name)
+                             + Path.DirectorySeparatorChar;
+        var jsonPath = Path.Combine(instanceFolder, name + ".json");
+        if (File.Exists(jsonPath) && !overwrite)
+            return $"实例“{name}”已存在；如需覆盖请把 overwrite 设为 true。";
+
+        var request = new McInstallRequest
+        {
+            targetInstanceName = name,
+            targetInstanceFolder = instanceFolder,
+            minecraftJson = jsonUrl,
+            minecraftName = id,
+            fabricVersion = fabricVersion
+        };
+
+        try
+        {
+            var combo = McInstallFlow.TryStart(
+                request,
+                overwrite,
+                $"{name} 下载",
+                instanceFolder,
+                "AI 下载安装失败",
+                (task, state) => LogWrapper.Info("Ai", $"AI 安装 {name} 结束：{state}"));
+            if (combo is null)
+                return "安装任务没有启动（可能已经在下载中）。";
+
+            return $"已开始后台下载安装“{name}”。可以用 get_install_status 查看进度；完成后会出现在版本列表。";
+        }
+        catch (Exception ex)
+        {
+            return "启动安装失败：" + ex.Message;
+        }
+    }
+
+    private static string GetInstallStatus(string? instanceName)
+    {
+        var tasks = new JsonArray();
+        foreach (var loader in Loading.loaderTaskbar.ToList())
+        {
+            if (!loader.Identifier.StartsWith("McInstall:", StringComparison.Ordinal))
+                continue;
+            if (!string.IsNullOrWhiteSpace(instanceName)
+                && !loader.DisplayName.Contains(instanceName, StringComparison.OrdinalIgnoreCase)
+                && !loader.Identifier.Contains(instanceName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            tasks.Add(new JsonObject
+            {
+                ["name"] = loader.DisplayName,
+                ["state"] = loader.State.ToString(),
+                ["progress"] = Math.Round(loader.Progress * 100d, 1),
+                ["error"] = loader.Error?.Message
+            });
+        }
+
+        return new JsonObject
+        {
+            ["count"] = tasks.Count,
+            ["tasks"] = tasks
+        }.ToJsonString();
+    }
+
+    private static string DetectLoader(McInstanceInfo info)
+    {
+        if (info.HasFabric) return "fabric";
+        if (info.HasQuilt) return "quilt";
+        if (info.HasNeoForge) return "neoforge";
+        if (info.HasForge) return "forge";
+        return "";
+    }
+
+    private static async Task<JsonNode?> GetJsonAsync(string url, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.UserAgent.ParseAdd("PCL-CE-AI");
+        using var response = await DownloadHttp.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+            return null;
+        return JsonNode.Parse(await response.Content.ReadAsStringAsync(ct));
+    }
+
+    private static async Task<string> DownloadModAsync(
+        string? query,
+        string? gameVersion,
+        string? loader,
+        string? instanceName,
+        bool enable,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return "缺少参数 query。";
+
+        McInstance? instance = InstanceList.McMcInstanceSelected;
+        if (!string.IsNullOrWhiteSpace(instanceName))
+            instance = EnumerateInstances().FirstOrDefault(item =>
+                string.Equals(item.Name, instanceName.Trim(), StringComparison.OrdinalIgnoreCase))
+                ?? instance;
+        if (instance is null)
+            return "当前没有选择实例；请先让用户选择版本或用 instance 参数指定。";
+
+        var minecraftVersion = string.IsNullOrWhiteSpace(gameVersion)
+            ? instance.Info.VanillaName
+            : gameVersion.Trim();
+        var loaderName = string.IsNullOrWhiteSpace(loader)
+            ? DetectLoader(instance.Info)
+            : loader.Trim().ToLowerInvariant();
+
+        var facets = new JsonArray
+        {
+            new JsonArray { "project_type:mod" }
+        };
+        if (!string.IsNullOrWhiteSpace(minecraftVersion))
+            facets.Add(new JsonArray { "versions:" + minecraftVersion });
+        if (!string.IsNullOrWhiteSpace(loaderName))
+            facets.Add(new JsonArray { "categories:" + loaderName });
+
+        var searchUrl =
+            "https://api.modrinth.com/v2/search?limit=5&query="
+            + Uri.EscapeDataString(query.Trim())
+            + "&facets=" + Uri.EscapeDataString(facets.ToJsonString());
+        var search = await GetJsonAsync(searchUrl, ct);
+        var hit = (search?["hits"] as JsonArray)?
+            .OfType<JsonObject>()
+            .FirstOrDefault();
+        if (hit is null)
+            return $"Modrinth 没有找到与“{query}”匹配的 Mod。";
+
+        var projectId = hit["project_id"]?.ToString()
+                        ?? hit["slug"]?.ToString()
+                        ?? "";
+        var title = hit["title"]?.ToString() ?? projectId;
+        if (string.IsNullOrWhiteSpace(projectId))
+            return "Modrinth 搜索结果缺少项目 ID。";
+
+        var versionUrl = "https://api.modrinth.com/v2/project/"
+                         + Uri.EscapeDataString(projectId) + "/version";
+        var queryParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(minecraftVersion))
+            queryParts.Add("game_versions="
+                           + Uri.EscapeDataString(
+                               new JsonArray { minecraftVersion }.ToJsonString()));
+        if (!string.IsNullOrWhiteSpace(loaderName))
+            queryParts.Add("loaders="
+                           + Uri.EscapeDataString(
+                               new JsonArray { loaderName }.ToJsonString()));
+        if (queryParts.Count > 0)
+            versionUrl += "?" + string.Join("&", queryParts);
+
+        var versions = await GetJsonAsync(versionUrl, ct) as JsonArray;
+        var version = versions?
+            .OfType<JsonObject>()
+            .FirstOrDefault(item => item["files"] is JsonArray);
+        var files = version?["files"] as JsonArray;
+        var file = files?
+            .OfType<JsonObject>()
+            .FirstOrDefault(item => item["primary"]?.GetValue<bool>() is true)
+            ?? files?.OfType<JsonObject>().FirstOrDefault();
+        var fileUrl = file?["url"]?.ToString();
+        var fileName = Path.GetFileName(file?["filename"]?.ToString() ?? "");
+        if (string.IsNullOrWhiteSpace(fileUrl) || string.IsNullOrWhiteSpace(fileName))
+            return $"没有找到“{title}”适配 {minecraftVersion} / {loaderName} 的文件。";
+
+        var modsFolder = Path.Combine(instance.PathInstance, "mods");
+        Directory.CreateDirectory(modsFolder);
+        var targetName = enable ? fileName : fileName + ".disabled";
+        var targetPath = Path.Combine(modsFolder, targetName);
+        if (File.Exists(targetPath))
+            return $"{title} 已经存在：{targetName}";
+
+        using (var response = await DownloadHttp.GetAsync(fileUrl, ct))
+        {
+            response.EnsureSuccessStatusCode();
+            await using var stream = File.Create(targetPath);
+            await response.Content.CopyToAsync(stream, ct);
+        }
+
+        return new JsonObject
+        {
+            ["project"] = title,
+            ["version"] = version?["version_number"]?.ToString(),
+            ["file"] = targetPath,
+            ["enabled"] = enable
+        }.ToJsonString();
     }
 
     private static string OpenInstallPage(string? version, bool navigate)
