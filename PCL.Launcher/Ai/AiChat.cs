@@ -304,7 +304,9 @@ public sealed class AiChatService
             using var cts = new CancellationTokenSource();
             _cts = cts;
             StatusChanged?.Invoke("正在压缩上下文…");
-            var compressed = await CompressCoreAsync(cts.Token, 2);
+            var compressed = await Task.Run(
+                async () => await CompressCoreAsync(cts.Token, 2),
+                cts.Token);
             AddMessage(new AiChatMessage
             {
                 Role = AiRole.Assistant,
@@ -596,7 +598,8 @@ public sealed class AiChatService
             UpdateConversationTitle(text);
             TrimHistory();
 
-            await RunToolLoopAsync(cts.Token);
+            // 整个工具循环放到线程池，避免文件扫描、日志读取等操作阻塞 UI 线程。
+            await Task.Run(async () => await RunToolLoopAsync(cts.Token), cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -677,7 +680,16 @@ public sealed class AiChatService
             {
                 ct.ThrowIfCancellationRequested();
                 StatusChanged?.Invoke($"正在执行 {DescribeTool(call.Name)}…");
-                var result = await AiTools.ExecuteAsync(call, ct);
+                string result;
+                try
+                {
+                    result = await AiTools.ExecuteAsync(call, ct)
+                        .WaitAsync(TimeSpan.FromSeconds(60), ct);
+                }
+                catch (TimeoutException)
+                {
+                    result = "工具执行超时（60 秒），已跳过。";
+                }
                 AddMessage(new AiChatMessage
                 {
                     Role = AiRole.Tool,
@@ -733,12 +745,24 @@ public sealed class AiChatService
 
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream, Encoding.UTF8);
+        using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        idleCts.CancelAfter(TimeSpan.FromSeconds(90));
         var accumulators = new Dictionary<int, AiToolCall>();
 
         while (true)
         {
             ct.ThrowIfCancellationRequested();
-            var line = await reader.ReadLineAsync(ct);
+            string? line;
+            try
+            {
+                line = await reader.ReadLineAsync(idleCts.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new TimeoutException("模型 90 秒没有返回新数据，已中断本次回复。");
+            }
+
+            idleCts.CancelAfter(TimeSpan.FromSeconds(90));
             if (line is null)
                 break;
             if (line.Length == 0 || !line.StartsWith("data:", StringComparison.Ordinal))

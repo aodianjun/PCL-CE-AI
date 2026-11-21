@@ -149,8 +149,13 @@ public static class AiTools
         );
     }
 
-    /// <summary>执行一次工具调用，返回给模型的文本结果。</summary>
-    public static async Task<string> ExecuteAsync(AiToolCall call, CancellationToken ct)
+    /// <summary>执行一次工具调用，返回给模型的文本结果。工具统一在线程池执行，不占用 UI 线程。</summary>
+    public static Task<string> ExecuteAsync(AiToolCall call, CancellationToken ct)
+    {
+        return Task.Run(() => ExecuteCoreAsync(call, ct), ct);
+    }
+
+    private static async Task<string> ExecuteCoreAsync(AiToolCall call, CancellationToken ct)
     {
         try
         {
