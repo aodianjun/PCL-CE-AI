@@ -161,7 +161,8 @@ Release 构建默认不读运行时环境变量，必须在**编译期**把客�
 - AI 工具默认不切换页面：`open_page`、`search_resource`、`install_version_note` 新增 `navigate` 参数（默认 false），只有用户明确要求打开页面时才为 true；`launch_game` 与崩溃分析也不再强制跳转启动页。
 - 「设置 → AI 接入」新增工作目录与允许访问文件夹。AI 工具新增 `get_work_directory`、`list_files`、`read_file`、`search_files`、`open_folder`，只能访问工作目录、允许文件夹、当前 Minecraft 目录与实例目录；越界路径直接拒绝。
 - 输入框支持图片与文本文件附件：图片以 data URL 走多模态 `image_url`，文本文件并入上下文；附件随用户消息显示文件名，最多 6 个。
-- AI 新增下载能力：`download_minecraft`（原版 / Fabric，后台安装并支持 `get_install_status` 查询进度）、`download_mod`（Modrinth 搜索并下载到当前实例 mods 目录）。Forge/NeoForge 仍引导到安装页。
+- AI 新增下载能力：`download_minecraft`（原版 / Fabric）、`download_mod`（Modrinth 搜索并下载到当前实例 mods 目录）。Forge/NeoForge 仍引导到安装页。
+- `download_minecraft` 与 `launch_game` 默认 `wait=true`：轮询安装/启动加载器直到结束，把最终状态、进度与错误返回给 AI，AI 可以紧接着切换版本或启动游戏；也可传 `wait:false` 只启动后台任务。工具外层超时会按工具类型放宽（下载 30 分钟、启动 10 分钟），执行中会通过状态栏显示进度百分比。
 - 支持 Ctrl+V 直接粘贴：剪贴板里是文件时按文件路径读取附件，是位图时转成 PNG 附件；没有附件时保持默认文本粘贴。
 
 ## 九、仓库、反馈与作者

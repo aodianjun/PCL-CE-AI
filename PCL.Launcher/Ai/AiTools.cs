@@ -84,8 +84,16 @@ public static class AiTools
                 Required("name")),
             Tool(
                 "launch_game",
-                "使用当前选中的版本和账号启动 Minecraft。",
-                new JsonObject()),
+                "使用当前选中的版本和账号启动 Minecraft；默认等待启动流程结束后再返回。",
+                new JsonObject
+                {
+                    ["wait"] = Bool("是否等待启动流程完成，默认 true"),
+                    ["timeout_seconds"] = new JsonObject
+                    {
+                        ["type"] = "integer",
+                        ["description"] = "等待超时秒数，默认 600"
+                    }
+                }),
             Tool(
                 "list_mods",
                 "列出当前版本 mods 文件夹中的 Mod，包含启用状态与文件大小。",
@@ -200,7 +208,13 @@ public static class AiTools
                     ["version"] = Str("Minecraft 版本号，例如 1.21.1"),
                     ["loader"] = Str("可选：vanilla（默认）或 fabric"),
                     ["instance_name"] = Str("可选，实例名称，默认使用版本号；Fabric 默认加 -Fabric 后缀"),
-                    ["overwrite"] = Bool("实例已存在时是否覆盖，默认 false")
+                    ["overwrite"] = Bool("实例已存在时是否覆盖，默认 false"),
+                    ["wait"] = Bool("是否等待安装完成后再返回，默认 true"),
+                    ["timeout_seconds"] = new JsonObject
+                    {
+                        ["type"] = "integer",
+                        ["description"] = "等待超时秒数，默认 1800"
+                    }
                 },
                 Required("version")),
             Tool(
@@ -225,6 +239,25 @@ public static class AiTools
         );
     }
 
+    /// <summary>由聊天服务设置，工具在执行长任务时可以回报进度。</summary>
+    public static Action<string>? ProgressReporter { get; set; }
+
+    /// <summary>按工具类型返回外层等待超时；长任务工具会留出额外缓冲。</summary>
+    public static TimeSpan GetToolTimeout(AiToolCall call)
+    {
+        var args = ParseArguments(call.Arguments);
+        var requested = GetInt(args, "timeout_seconds", 0);
+        var (defaultSeconds, min, max) = call.Name switch
+        {
+            "download_minecraft" => (1800, 60, 3600),
+            "launch_game" => (600, 30, 1800),
+            "download_mod" => (180, 30, 600),
+            _ => (60, 10, 300)
+        };
+        var seconds = requested > 0 ? Math.Clamp(requested, min, max) : defaultSeconds;
+        return TimeSpan.FromSeconds(seconds + 60d);
+    }
+
     /// <summary>执行一次工具调用，返回给模型的文本结果。工具统一在线程池执行，不占用 UI 线程。</summary>
     public static Task<string> ExecuteAsync(AiToolCall call, CancellationToken ct)
     {
@@ -241,7 +274,10 @@ public static class AiTools
                 "get_launcher_status" => GetLauncherStatus(),
                 "list_instances" => ListInstances(),
                 "select_instance" => SelectInstance(GetString(args, "name")),
-                "launch_game" => await LaunchGameAsync(),
+                "launch_game" => await LaunchGameAsync(
+                    GetBool(args, "wait"),
+                    GetInt(args, "timeout_seconds", 600),
+                    ct),
                 "list_mods" => ListMods(),
                 "set_mod_enabled" => SetModEnabled(
                     GetString(args, "file"),
@@ -277,6 +313,8 @@ public static class AiTools
                     GetString(args, "loader"),
                     GetString(args, "instance_name"),
                     GetBool(args, "overwrite"),
+                    GetBool(args, "wait"),
+                    GetInt(args, "timeout_seconds", 1800),
                     ct),
                 "get_install_status" => GetInstallStatus(GetString(args, "instance_name")),
                 "download_mod" => await DownloadModAsync(
@@ -486,7 +524,10 @@ public static class AiTools
         return $"已切换到版本“{instance.Name}”。";
     }
 
-    private static async Task<string> LaunchGameAsync()
+    private static async Task<string> LaunchGameAsync(
+        bool wait,
+        int timeoutSeconds,
+        CancellationToken ct)
     {
         var instance = InstanceList.McMcInstanceSelected;
         if (instance is null)
@@ -497,8 +538,49 @@ public static class AiTools
             return "这个版本正在安装中，暂时不能启动。";
 
         await Dispatcher.UIThread.InvokeAsync(() => GameLaunch.McLaunchStart());
+        if (!wait)
+            return $"已开始启动 Minecraft {instance.Name}。";
 
-        return $"已开始启动 Minecraft {instance.Name}。";
+        var seconds = Math.Clamp(timeoutSeconds, 30, 1800);
+        var loader = GameLaunch.mcLaunchLoader;
+        var result = await WaitForLoaderAsync(loader, seconds, ct, "启动");
+        var process = GameLaunch.mcLaunchProcess ?? GameLaunch.mcLaunchWatcher?.gameProcess;
+        result["instance_name"] = instance.Name;
+        result["game_started"] = GameWatcher.hasRunningMinecraft || process is { HasExited: false };
+        result["message"] = result["state"]?.ToString() == nameof(LoadState.Finished)
+            ? $"Minecraft {instance.Name} 启动流程已完成。"
+            : "启动未完成，请检查错误信息。";
+        return result.ToJsonString();
+    }
+
+    private static async Task<JsonObject> WaitForLoaderAsync(
+        Loading.LoaderBase loader,
+        int timeoutSeconds,
+        CancellationToken ct,
+        string label)
+    {
+        var started = DateTime.UtcNow;
+        while (loader.State is LoadState.Waiting or LoadState.Loading)
+        {
+            if ((DateTime.UtcNow - started).TotalSeconds > timeoutSeconds)
+                return new JsonObject
+                {
+                    ["state"] = "Timeout",
+                    ["progress"] = Math.Round(loader.Progress * 100d, 1),
+                    ["error"] = $"{label}超过 {timeoutSeconds} 秒仍未完成"
+                };
+
+            ProgressReporter?.Invoke(
+                $"{label} {Math.Round(loader.Progress * 100d, 1)}%");
+            await Task.Delay(500, ct);
+        }
+
+        return new JsonObject
+        {
+            ["state"] = loader.State.ToString(),
+            ["progress"] = Math.Round(loader.Progress * 100d, 1),
+            ["error"] = loader.Error?.Message
+        };
     }
 
     private static string ModsFolder()
@@ -1115,6 +1197,8 @@ public static class AiTools
         string? loader,
         string? instanceName,
         bool overwrite,
+        bool wait,
+        int timeoutSeconds,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(version))
@@ -1180,11 +1264,34 @@ public static class AiTools
                 $"{name} 下载",
                 instanceFolder,
                 "AI 下载安装失败",
-                (task, state) => LogWrapper.Info("Ai", $"AI 安装 {name} 结束：{state}"));
+                (task, state) =>
+                {
+                    try
+                    {
+                        McInstallRecovery.HandleTerminalState(task, instanceFolder);
+                        if (state == LoadState.Finished)
+                            McInstallFlow.ApplyFinished(name);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogWrapper.Warn("Ai", $"AI 安装收尾失败：{ex.Message}");
+                    }
+
+                    LogWrapper.Info("Ai", $"AI 安装 {name} 结束：{state}");
+                });
             if (combo is null)
                 return "安装任务没有启动（可能已经在下载中）。";
 
-            return $"已开始后台下载安装“{name}”。可以用 get_install_status 查看进度；完成后会出现在版本列表。";
+            if (!wait)
+                return $"已开始后台下载安装“{name}”。可以用 get_install_status 查看进度；完成后会出现在版本列表。";
+
+            var seconds = Math.Clamp(timeoutSeconds, 60, 3600);
+            var result = await WaitForLoaderAsync(combo, seconds, ct, "下载安装");
+            result["instance_name"] = name;
+            result["message"] = result["state"]?.ToString() == nameof(LoadState.Finished)
+                ? $"安装完成：{name}，可以继续切换版本或启动游戏。"
+                : "安装未完成，请检查错误信息。";
+            return result.ToJsonString();
         }
         catch (Exception ex)
         {

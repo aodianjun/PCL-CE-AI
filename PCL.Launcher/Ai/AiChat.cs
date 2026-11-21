@@ -719,14 +719,20 @@ public sealed class AiChatService
                 ct.ThrowIfCancellationRequested();
                 StatusChanged?.Invoke($"正在执行 {DescribeTool(call.Name)}…");
                 string result;
+                var toolTimeout = AiTools.GetToolTimeout(call);
+                AiTools.ProgressReporter = status => StatusChanged?.Invoke(status);
                 try
                 {
                     result = await AiTools.ExecuteAsync(call, ct)
-                        .WaitAsync(TimeSpan.FromSeconds(60), ct);
+                        .WaitAsync(toolTimeout, ct);
                 }
                 catch (TimeoutException)
                 {
-                    result = "工具执行超时（60 秒），已跳过。";
+                    result = $"工具执行超时（{toolTimeout.TotalSeconds:0} 秒），已跳过。";
+                }
+                finally
+                {
+                    AiTools.ProgressReporter = null;
                 }
                 AddMessage(new AiChatMessage
                 {
@@ -1118,6 +1124,7 @@ public sealed class AiChatService
         builder.AppendLine("5. 不要主动切换用户正在看的页面。只有用户明确说“打开/跳转某个页面”时，才把 open_page、search_resource、install_version_note 的 navigate 参数设为 true；其余情况保持 false，只告诉用户页面位置。");
         builder.AppendLine("6. 用户只说“启动”“开游戏”时，直接调用 launch_game。");
         builder.AppendLine("7. 需要看文件时先调用 list_files，再 read_file；只能访问工作目录或允许访问的文件夹，路径越界会被拒绝。");
+        builder.AppendLine("8. download_minecraft 与 launch_game 默认 wait=true，会等到安装或启动完成后再返回结果；拿到结果后直接继续下一步，不需要轮询 get_install_status。");
         builder.AppendLine();
         builder.AppendLine("当前启动器环境：");
         builder.AppendLine(minecraft);
