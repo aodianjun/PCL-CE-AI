@@ -104,7 +104,7 @@ public partial class PageSetupUpdateViewModel : ViewModelBase
 
     public void Reload()
     {
-        CurrentVersionText = "PCL CE " + VersionNameFormat(LauncherCommon.VersionBaseName);
+        CurrentVersionText = "PCL CE-AI " + VersionNameFormat(LauncherCommon.VersionBaseName);
         MirrorChyanKey = Config.Update.MirrorChyanKey;
         UpdateModeIndex = Math.Clamp((int)Config.Update.UpdateMode, 0, 3);
         SetUpdateButtonState(InstallButtonState);
@@ -139,7 +139,7 @@ public partial class PageSetupUpdateViewModel : ViewModelBase
             var version = await Task.Run(() =>
                 UpdateManager.remoteServer.GetLatestVersion(channel, arch));
             _latestVersion = version;
-            UpdateNameText = "PCL CE " + VersionNameFormat(version.VersionName);
+            UpdateNameText = "PCL CE-AI " + VersionNameFormat(version.VersionName);
             _changelogSummary = ExtractSummary(version.Changelog);
             OnPropertyChanged(nameof(ChangelogText));
 

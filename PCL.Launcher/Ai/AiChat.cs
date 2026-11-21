@@ -539,7 +539,7 @@ public sealed class AiChatService
         var minecraft = AiTools.GetEnvironmentSummary();
         var extra = Config.Ai.SystemPromptExtra;
         var builder = new StringBuilder();
-        builder.AppendLine("你是 PCL CE 启动器内置的 AI 助手，运行在「纯 AI 启动页」里。");
+        builder.AppendLine("你是 PCL CE-AI 启动器内置的 AI 助手，运行在「纯 AI 启动页」里。");
         builder.AppendLine("你的职责：用中文帮用户完成与 Minecraft 启动器有关的一切事情，包括选择版本、启动游戏、下载与安装游戏和加载器、管理 Mod 与整合包、分析崩溃和报错、调整启动器设置。");
         builder.AppendLine("规则：");
         builder.AppendLine("1. 需要真实数据时先调用工具，不要凭空编造版本名、路径、Mod 列表或崩溃原因。");

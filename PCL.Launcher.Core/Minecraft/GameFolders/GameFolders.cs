@@ -159,7 +159,7 @@ public static class GameFolders
         }
         catch (Exception ex)
         {
-            LauncherCommon.Log(ex, "扫描 PCL CE 所在文件夹中是否有 MC 文件夹失败");
+            LauncherCommon.Log(ex, "扫描 PCL CE-AI 所在文件夹中是否有 MC 文件夹失败");
         }
 
         var mojangPath = LauncherPaths.OfficialMinecraftDirectory;
@@ -253,7 +253,7 @@ public static class GameFolders
                       "profiles":  {
                           "PCL": {
                               "icon": "Grass",
-                              "name": "PCL CE",
+                              "name": "PCL CE-AI",
                               "lastVersionId": "latest-release",
                               "type": "latest-release",
                               "lastUsed": "{{now.ToString("yyyy'-'MM'-'dd", CultureInfo.InvariantCulture)}}T{{now.ToString("HH':'mm':'ss", CultureInfo.InvariantCulture)}}.0000Z"

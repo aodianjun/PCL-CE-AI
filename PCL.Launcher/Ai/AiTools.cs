@@ -187,7 +187,7 @@ public static class AiTools
         try
         {
             var instance = InstanceList.McMcInstanceSelected;
-            builder.AppendLine($"- 启动器：PCL CE {typeof(AiTools).Assembly.GetName().Version}");
+            builder.AppendLine($"- 启动器：PCL CE-AI {typeof(AiTools).Assembly.GetName().Version}");
             builder.AppendLine($"- 游戏目录：{ResolveMinecraftFolder()}");
             builder.AppendLine($"- 当前版本：{instance?.Name ?? "未选择"}");
             if (instance is not null)

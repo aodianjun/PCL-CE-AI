@@ -27,6 +27,7 @@ internal sealed class CrashLogPreparer(CrashAnalysisContext context)
             "启动器日志.txt",
             "PCL2 启动器日志.txt",
             "PCL 启动器日志.txt",
+            "PCL CE-AI 启动器日志.txt",
             "PCL CE 启动器日志.txt",
             "log1.txt",
             "log-ce1.log"
@@ -196,6 +197,7 @@ internal sealed class CrashLogPreparer(CrashAnalysisContext context)
                      "log1.txt",
                      "log-ce1.log",
                      "游戏崩溃前的输出.txt",
+                     "PCL CE-AI 启动器日志.txt",
                      "PCL CE 启动器日志.txt",
                      "PCL2 启动器日志.txt",
                      "PCL 启动器日志.txt"
@@ -333,7 +335,7 @@ internal sealed class CrashLogPreparer(CrashAnalysisContext context)
             else if (line.Contains("以下为游戏输出的最后一段内容"))
             {
                 hasLauncherMark = true;
-                LogWrapper.Info("Crash", "找到 PCL CE 输出的游戏实时日志头");
+                LogWrapper.Info("Crash", "找到 PCL CE-AI 输出的游戏实时日志头");
             }
 
         return hasLauncherMark

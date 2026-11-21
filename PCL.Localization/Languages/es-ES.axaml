@@ -28,7 +28,7 @@
     <sys:String x:Key="Launch.Ai.Launch">Launch game</sys:String>
     <sys:String x:Key="Launch.Ai.CancelLaunch">Cancel launch</sys:String>
     <sys:String x:Key="Launch.Ai.PoweredBy">Let the AI do everything: launch, download versions, manage mods, analyze crashes</sys:String>
-    <sys:String x:Key="Launch.Ai.Welcome">Hi, I am the PCL CE AI assistant. You can ask me to launch the game, download or install versions, manage mods, analyze crash logs, or answer any launcher question.</sys:String>
+    <sys:String x:Key="Launch.Ai.Welcome">Hi, I am the PCL CE-AI AI assistant. You can ask me to launch the game, download or install versions, manage mods, analyze crash logs, or answer any launcher question.</sys:String>
     <sys:String x:Key="Launch.Ai.NotConfigured">No API key configured yet. I opened Settings - AI setup for you; fill it in to start chatting.</sys:String>
     <sys:String x:Key="Launch.Ai.Quick.Launch">Launch game</sys:String>
     <sys:String x:Key="Launch.Ai.Quick.Download">Install 1.21.1</sys:String>

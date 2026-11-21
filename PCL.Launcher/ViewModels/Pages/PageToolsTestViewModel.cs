@@ -242,7 +242,7 @@ public partial class PageToolsTestViewModel : ViewModelBase
                 shortcutPath,
                 target,
                 workingDirectory: AppContext.BaseDirectory,
-                description: "PCL CE",
+                description: "PCL CE-AI",
                 icon: ApplicationRuntime.Current.Platform.Capabilities.SupportsShortcutIcon
                     ? EnsureShortcutIcon()
                     : null);

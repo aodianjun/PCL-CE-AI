@@ -12,6 +12,6 @@ public static class PlatformDetector
         if (OperatingSystem.IsWindows()) return PlatformKind.Windows;
         if (OperatingSystem.IsLinux()) return PlatformKind.Linux;
         if (OperatingSystem.IsMacOS()) return PlatformKind.MacOs;
-        throw new PlatformNotSupportedException("当前操作系统不受 PCL CE 支持。");
+        throw new PlatformNotSupportedException("当前操作系统不受 PCL CE-AI 支持。");
     }
 }

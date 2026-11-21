@@ -1,9 +1,9 @@
 ﻿<#
 .SYNOPSIS
-  带微软登录客户端 ID 构建 PCL CE：生成的包在任何设备上都能直接使用正版登录。
+  带微软登录客户端 ID 构建 PCL CE-AI：生成的包在任何设备上都能直接使用正版登录。
 
 .DESCRIPTION
-  PCL CE 的微软 OAuth 客户端 ID 通过编译期环境变量注入：
+  PCL CE-AI 的微软 OAuth 客户端 ID 通过编译期环境变量注入：
     PCL_WRITE_SECRET=1  允许源生成器把 PCL_* 变量写入产物；
     PCL_MS_CLIENT_ID    你的 Microsoft Entra 应用（客户端 ID）。
   注入后，Release 产物运行时不再读取环境变量，任何设备运行该构建都能正版登录。

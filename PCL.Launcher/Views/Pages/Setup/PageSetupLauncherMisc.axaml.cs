@@ -261,7 +261,7 @@ public partial class PageSetupLauncherMisc : MyPageRight, ISetupResetPage
     {
         var savePath = await SystemDialogs.SelectSaveFileAsync(
             Lang.Text("Setup.Misc.System.ExportSettings.SaveTitle"),
-            "PCL CE 全局配置.json",
+            "PCL CE-AI 全局配置.json",
             Lang.Text("Setup.Misc.System.ExportSettings.Filter"),
             Basics.ExecutableDirectory);
         if (string.IsNullOrWhiteSpace(savePath)) return;
@@ -320,7 +320,7 @@ public partial class PageSetupLauncherMisc : MyPageRight, ISetupResetPage
         return Lang.Number(Math.Round(tick / 10d + 0.1d, 1), "N1") + "x";
     }
 
-    #region 停止使用 PCL CE
+    #region 停止使用 PCL CE-AI
 
     private static async Task StopUsingPclCeAsync()
     {
@@ -355,7 +355,7 @@ public partial class PageSetupLauncherMisc : MyPageRight, ISetupResetPage
         {
             LauncherCommon.Log(
                 ex,
-                "停止使用 PCL CE 失败",
+                "停止使用 PCL CE-AI 失败",
                 LauncherLogLevel.Msgbox,
                 userSummary: Lang.Text("Setup.Error.OperationFailed"));
         }
