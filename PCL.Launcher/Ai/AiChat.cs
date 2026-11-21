@@ -440,7 +440,7 @@ public sealed class AiChatService
             return;
 
         var usage = GetContextUsage();
-        var tokenThreshold = Math.Max(4000, (int)(usage.Limit * 0.6));
+        var tokenThreshold = Math.Max(4000, (int)(usage.Limit * 0.95));
         if (usage.EstimatedTokens < tokenThreshold)
             return;
 
