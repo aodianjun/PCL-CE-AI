@@ -3802,4 +3802,14 @@
     <sys:String x:Key="Launch.Ai.ToolCalling">正在调用工具…</sys:String>
     <sys:String x:Key="Launch.Ai.Reasoning">思考</sys:String>
     <sys:String x:Key="Launch.Ai.ToolExecution">工具：{0}</sys:String>
+    <sys:String x:Key="Launch.Ai.Attach">添加图片或文件</sys:String>
+    <sys:String x:Key="Launch.Ai.Attachment.Limit">最多添加 6 个附件。</sys:String>
+    <sys:String x:Key="Launch.Ai.Attachment.TooLarge">文件过大，已跳过：{0}</sys:String>
+    <sys:String x:Key="Launch.Ai.Attachment.Failed">读取附件失败：{0}</sys:String>
+    <sys:String x:Key="Launch.Ai.Attachment.Placeholder">请查看附件</sys:String>
+    <sys:String x:Key="Setup.Ai.WorkDirectory">工作目录</sys:String>
+    <sys:String x:Key="Setup.Ai.PickFolder">选择</sys:String>
+    <sys:String x:Key="Setup.Ai.AllowedDirectories">允许访问的文件夹</sys:String>
+    <sys:String x:Key="Setup.Ai.AllowedDirectories.Hint">多个路径用 ; 分隔</sys:String>
+    <sys:String x:Key="Setup.Ai.AddFolder">添加</sys:String>
 </ResourceDictionary>

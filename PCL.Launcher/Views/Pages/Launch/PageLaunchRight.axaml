@@ -173,8 +173,24 @@
             <Panel Grid.Row="2"
                    Margin="0,10,0,12">
                 <Grid x:Name="PanInput"
-                      ColumnDefinitions="*,Auto">
-                    <Border CornerRadius="8"
+                      RowDefinitions="Auto,Auto"
+                      ColumnDefinitions="Auto,*,Auto">
+                    <WrapPanel x:Name="PanPendingAttachments"
+                               Grid.Row="0"
+                               Grid.ColumnSpan="3"
+                               Margin="0,0,0,6"
+                               IsVisible="False" />
+                    <ui:MyIconButton x:Name="BtnAttachFiles"
+                                     Grid.Row="1"
+                                     Grid.Column="0"
+                                     Width="40"
+                                     Height="46"
+                                     Margin="0,0,8,0"
+                                     SvgIcon="lucide/file-input"
+                                     ToolTip.Tip="{loc:Loc Launch.Ai.Attach}" />
+                    <Border Grid.Row="1"
+                            Grid.Column="1"
+                            CornerRadius="8"
                             Background="{DynamicResource ColorBrushToolTip}">
                         <ui:MyTextBox x:Name="TxtInput"
                                       MinHeight="46"
@@ -186,7 +202,8 @@
                                       HintText="{loc:Loc Launch.Ai.Input.Hint}" />
                     </Border>
                     <ui:MyIconButton x:Name="BtnSend"
-                                     Grid.Column="1"
+                                     Grid.Row="1"
+                                     Grid.Column="2"
                                      Width="46"
                                      Height="46"
                                      Margin="8,0,0,0"

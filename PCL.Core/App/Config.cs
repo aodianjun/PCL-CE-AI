@@ -656,6 +656,12 @@ public static partial class Config
         /// <summary>单次回复最大输出 tokens。</summary>
         [ConfigItem<int>("AiMaxOutputTokens", 4096, ConfigSource.Local)] public partial int MaxOutputTokens { get; set; }
 
+        /// <summary>AI 文件操作的工作目录。</summary>
+        [ConfigItem<string>("AiWorkDirectory", "", ConfigSource.Local)] public partial string WorkDirectory { get; set; }
+
+        /// <summary>额外允许 AI 访问的文件夹，多个路径用分号分隔。</summary>
+        [ConfigItem<string>("AiAllowedDirectories", "", ConfigSource.Local)] public partial string AllowedDirectories { get; set; }
+
         /// <summary>系统提示词附加内容。</summary>
         [ConfigItem<string>("AiSystemPromptExtra", "", ConfigSource.Local)] public partial string SystemPromptExtra { get; set; }
     }

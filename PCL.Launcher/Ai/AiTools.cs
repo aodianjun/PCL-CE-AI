@@ -148,6 +148,48 @@ public static class AiTools
                 {
                     ["version"] = Str("可选，目标版本号"),
                     ["navigate"] = Bool("是否真的切换页面。只有用户明确要求打开安装页时才设为 true；默认 false")
+                }),
+            Tool(
+                "get_work_directory",
+                "读取 AI 当前的工作目录和允许访问的文件夹。",
+                new JsonObject()),
+            Tool(
+                "list_files",
+                "列出工作目录或允许文件夹中的文件。",
+                new JsonObject
+                {
+                    ["path"] = Str("可选，相对工作目录的路径或允许范围内的绝对路径；留空表示工作目录根"),
+                    ["pattern"] = Str("可选，文件名通配符，例如 *.json，默认 *"),
+                    ["recursive"] = Bool("是否递归子目录，默认 false")
+                }),
+            Tool(
+                "read_file",
+                "读取工作目录或允许文件夹中的文本文件。",
+                new JsonObject
+                {
+                    ["path"] = Str("相对工作目录的路径或允许范围内的绝对路径"),
+                    ["max_chars"] = new JsonObject
+                    {
+                        ["type"] = "integer",
+                        ["description"] = "最多返回的字符数，默认 20000"
+                    }
+                },
+                Required("path")),
+            Tool(
+                "search_files",
+                "按文件名搜索工作目录或允许文件夹中的文件。",
+                new JsonObject
+                {
+                    ["query"] = Str("文件名关键字，不区分大小写"),
+                    ["path"] = Str("可选，搜索起点")
+                },
+                Required("query")),
+            Tool(
+                "open_folder",
+                "在资源管理器中打开工作目录或允许文件夹中的目录。",
+                new JsonObject
+                {
+                    ["path"] = Str("可选，要打开的目录；留空表示工作目录")
                 })
         );
     }
@@ -187,6 +229,18 @@ public static class AiTools
                 "install_version_note" => OpenInstallPage(
                     GetString(args, "version"),
                     GetBool(args, "navigate")),
+                "get_work_directory" => GetWorkDirectoryInfo(),
+                "list_files" => ListFiles(
+                    GetString(args, "path"),
+                    GetString(args, "pattern"),
+                    GetBool(args, "recursive")),
+                "read_file" => ReadTextFile(
+                    GetString(args, "path"),
+                    GetInt(args, "max_chars", 20000)),
+                "search_files" => SearchFiles(
+                    GetString(args, "query"),
+                    GetString(args, "path")),
+                "open_folder" => OpenFolder(GetString(args, "path")),
                 _ => $"未知工具：{call.Name}"
             };
         }
@@ -215,6 +269,16 @@ public static class AiTools
             {
                 builder.AppendLine($"- 版本路径：{instance.PathInstance}");
                 builder.AppendLine($"- Mod 数量：{CountMods(instance.PathInstance)}");
+            try
+            {
+                builder.AppendLine($"- AI 工作目录：{(string.IsNullOrWhiteSpace(Config.Ai.WorkDirectory) ? "未设置" : Config.Ai.WorkDirectory)}");
+                if (!string.IsNullOrWhiteSpace(Config.Ai.AllowedDirectories))
+                    builder.AppendLine($"- 允许访问的文件夹：{Config.Ai.AllowedDirectories}");
+            }
+            catch (Exception)
+            {
+                // 配置未就绪时忽略。
+            }
             }
 
             var profile = ProfileService.Current;
@@ -710,6 +774,213 @@ public static class AiTools
         if (instance is not null)
             yield return Path.Combine(instance.PathInstance, "crash-reports");
         yield return Path.Combine(ResolveMinecraftFolder(), "crash-reports");
+    }
+
+    private static readonly string[] TextFileExtensions =
+    [
+        ".txt", ".md", ".json", ".log", ".yml", ".yaml", ".toml", ".ini", ".cfg",
+        ".conf", ".properties", ".xml", ".html", ".css", ".js", ".ts", ".cs",
+        ".java", ".kt", ".py", ".sh", ".ps1", ".bat", ".csv", ".mcmeta", ".lang"
+    ];
+
+    private static IReadOnlyList<string> GetAllowedRoots()
+    {
+        var roots = new List<string>();
+        void Add(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+            try
+            {
+                var full = Path.GetFullPath(value.Trim()).TrimEnd(
+                    Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar);
+                if (full.Length > 0 && !roots.Contains(full, StringComparer.OrdinalIgnoreCase))
+                    roots.Add(full);
+            }
+            catch (Exception)
+            {
+                // 忽略非法路径。
+            }
+        }
+
+        Add(Config.Ai.WorkDirectory);
+        foreach (var item in (Config.Ai.AllowedDirectories ?? "")
+                     .Split([';', '|'], StringSplitOptions.RemoveEmptyEntries))
+            Add(item);
+
+        // 当前 Minecraft 目录与实例目录默认允许访问，方便读写配置和日志。
+        Add(LauncherPaths.MinecraftFolder);
+        Add(InstanceList.McMcInstanceSelected?.PathInstance);
+        return roots;
+    }
+
+    private static string? ResolveAllowedPath(string? path, out string? error)
+    {
+        error = null;
+        var roots = GetAllowedRoots();
+        if (roots.Count == 0)
+        {
+            error = "还没有设置工作目录。请让用户先在“设置 → AI 接入”里选择工作目录。";
+            return null;
+        }
+
+        var baseRoot = roots[0];
+        string candidate;
+        try
+        {
+            candidate = string.IsNullOrWhiteSpace(path)
+                ? baseRoot
+                : Path.IsPathRooted(path)
+                    ? Path.GetFullPath(path)
+                    : Path.GetFullPath(Path.Combine(baseRoot, path));
+        }
+        catch (Exception ex)
+        {
+            error = "路径无效：" + ex.Message;
+            return null;
+        }
+
+        candidate = candidate.TrimEnd(
+            Path.DirectorySeparatorChar,
+            Path.AltDirectorySeparatorChar);
+        foreach (var root in roots)
+        {
+            if (candidate.Equals(root, StringComparison.OrdinalIgnoreCase)
+                || candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                || candidate.StartsWith(root + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return candidate;
+        }
+
+        error = "拒绝访问：该路径不在工作目录或允许访问的文件夹内。";
+        return null;
+    }
+
+    private static string GetWorkDirectoryInfo()
+    {
+        var roots = GetAllowedRoots();
+        var result = new JsonObject
+        {
+            ["work_directory"] = Config.Ai.WorkDirectory,
+            ["allowed_directories"] = new JsonArray(roots.Select(root => (JsonNode?)root).ToArray())
+        };
+        return result.ToJsonString();
+    }
+
+    private static string ListFiles(string? path, string? pattern, bool recursive)
+    {
+        var directory = ResolveAllowedPath(path, out var error);
+        if (directory is null)
+            return error ?? "无法访问该路径。";
+        if (!Directory.Exists(directory))
+            return "目录不存在：" + directory;
+
+        try
+        {
+            var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+            var files = Directory
+                .EnumerateFileSystemEntries(directory, string.IsNullOrWhiteSpace(pattern) ? "*" : pattern, option)
+                .Take(300)
+                .Select(item =>
+                {
+                    var isDirectory = Directory.Exists(item);
+                    var info = isDirectory ? null : new FileInfo(item);
+                    return (JsonNode)new JsonObject
+                    {
+                        ["name"] = Path.GetFileName(item),
+                        ["type"] = isDirectory ? "dir" : "file",
+                        ["size"] = info?.Length ?? 0
+                    };
+                })
+                .ToArray();
+            return new JsonObject
+            {
+                ["directory"] = directory,
+                ["count"] = files.Length,
+                ["entries"] = new JsonArray(files)
+            }.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            return "列出文件失败：" + ex.Message;
+        }
+    }
+
+    private static string ReadTextFile(string? path, int maxChars)
+    {
+        var file = ResolveAllowedPath(path, out var error);
+        if (file is null)
+            return error ?? "无法访问该路径。";
+        if (!File.Exists(file))
+            return "文件不存在：" + file;
+
+        var extension = Path.GetExtension(file).ToLowerInvariant();
+        if (!TextFileExtensions.Contains(extension))
+            return $"不支持读取该文件类型：{extension}。只支持文本类文件。";
+
+        try
+        {
+            var info = new FileInfo(file);
+            if (info.Length > 2 * 1024 * 1024)
+                return "文件超过 2 MB，拒绝读取。";
+            var text = File.ReadAllText(file);
+            maxChars = Math.Clamp(maxChars, 1000, 100000);
+            if (text.Length > maxChars)
+                text = text[..maxChars] + "\n…（已截断）";
+            return new JsonObject
+            {
+                ["path"] = file,
+                ["chars"] = text.Length,
+                ["content"] = text
+            }.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            return "读取文件失败：" + ex.Message;
+        }
+    }
+
+    private static string SearchFiles(string? query, string? path)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return "缺少参数 query。";
+        var directory = ResolveAllowedPath(path, out var error);
+        if (directory is null)
+            return error ?? "无法访问该路径。";
+        if (!Directory.Exists(directory))
+            return "目录不存在：" + directory;
+
+        try
+        {
+            var matches = Directory
+                .EnumerateFiles(directory, "*", SearchOption.AllDirectories)
+                .Where(file => Path.GetFileName(file).Contains(query.Trim(), StringComparison.OrdinalIgnoreCase))
+                .Take(200)
+                .Select(file => (JsonNode)file)
+                .ToArray();
+            return new JsonObject
+            {
+                ["query"] = query,
+                ["count"] = matches.Length,
+                ["files"] = new JsonArray(matches)
+            }.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            return "搜索失败：" + ex.Message;
+        }
+    }
+
+    private static string OpenFolder(string? path)
+    {
+        var directory = ResolveAllowedPath(path, out var error);
+        if (directory is null)
+            return error ?? "无法访问该路径。";
+        if (!Directory.Exists(directory))
+            return "目录不存在：" + directory;
+
+        Dispatcher.UIThread.Post(() => Basics.OpenPath(directory));
+        return "已在资源管理器中打开：" + directory;
     }
 
     private static string OpenInstallPage(string? version, bool navigate)

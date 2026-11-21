@@ -19,6 +19,20 @@ public enum AiRole
     Tool
 }
 
+/// <summary>随用户消息发送的图片或文本附件。</summary>
+public sealed class AiAttachment
+{
+    public string Name { get; init; } = "";
+
+    public bool IsImage { get; init; }
+
+    /// <summary>图片的 data URL（data:image/png;base64,...）。</summary>
+    public string? DataUrl { get; init; }
+
+    /// <summary>文本文件的正文。</summary>
+    public string? TextContent { get; init; }
+}
+
 /// <summary>一次工具调用请求。</summary>
 public sealed class AiToolCall
 {
@@ -53,6 +67,9 @@ public sealed class AiChatMessage
 
     /// <summary>模型的思考过程（reasoning_content）。</summary>
     public string Reasoning { get; set; } = "";
+
+    /// <summary>用户消息携带的图片/文件附件。</summary>
+    public List<AiAttachment> Attachments { get; } = [];
 
     /// <summary>助手消息中请求的工具调用。</summary>
     public List<AiToolCall> ToolCalls { get; } = [];
@@ -525,7 +542,13 @@ public sealed class AiChatService
     /// <summary>从聊天界面发送一条用户消息。</summary>
     public Task SendAsync(string text)
     {
-        return SendCoreAsync(text, false);
+        return SendCoreAsync(text, null, false);
+    }
+
+    /// <summary>发送一条带图片/文件附件的用户消息。</summary>
+    public Task SendAsync(string text, IReadOnlyList<AiAttachment>? attachments)
+    {
+        return SendCoreAsync(text, attachments, false);
     }
 
     /// <summary>把游戏崩溃报告转交给 AI 分析。报告正文隐藏提交，聊天里只显示一条提示。</summary>
@@ -551,13 +574,17 @@ public sealed class AiChatService
 
         _ = SendCoreAsync(
             "游戏刚刚崩溃了。请结合自动提交的崩溃报告，用简洁的中文说明崩溃原因，并给出可以直接执行的修复步骤。",
+            null,
             true);
     }
 
-    private async Task SendCoreAsync(string text, bool auto)
+    private async Task SendCoreAsync(
+        string text,
+        IReadOnlyList<AiAttachment>? attachments,
+        bool auto)
     {
         text = text?.Trim() ?? "";
-        if (text.Length == 0)
+        if (text.Length == 0 && (attachments is null || attachments.Count == 0))
             return;
         if (!IsConfigured)
         {
@@ -593,12 +620,18 @@ public sealed class AiChatService
 
             await AutoCompressIfNeededAsync(cts.Token);
 
-            AddMessage(new AiChatMessage
+            var userMessage = new AiChatMessage
             {
                 Role = AiRole.User,
                 Content = text
-            });
-            UpdateConversationTitle(text);
+            };
+            if (attachments is { Count: > 0 })
+                userMessage.Attachments.AddRange(attachments);
+            AddMessage(userMessage);
+            UpdateConversationTitle(
+                text.Length > 0
+                    ? text
+                    : attachments?.FirstOrDefault()?.Name ?? "");
             TrimHistory();
 
             // 整个工具循环放到线程池，避免文件扫描、日志读取等操作阻塞 UI 线程。
@@ -955,6 +988,42 @@ public sealed class AiChatService
                     });
                 item["tool_calls"] = calls;
             }
+            else if (message.Role == AiRole.User && message.Attachments.Count > 0)
+            {
+                var parts = new JsonArray();
+                var textParts = new System.Text.StringBuilder(message.Content ?? "");
+                foreach (var attachment in message.Attachments)
+                {
+                    if (attachment.IsImage || string.IsNullOrWhiteSpace(attachment.TextContent))
+                        continue;
+                    textParts.Append("\n\n【附件：").Append(attachment.Name).Append("】\n")
+                        .Append(attachment.TextContent);
+                }
+
+                var hasImages = message.Attachments.Any(a => a.IsImage && !string.IsNullOrWhiteSpace(a.DataUrl));
+                if (textParts.Length > 0 || !hasImages)
+                    parts.Add(new JsonObject
+                    {
+                        ["type"] = "text",
+                        ["text"] = textParts.ToString()
+                    });
+
+                foreach (var attachment in message.Attachments)
+                {
+                    if (!attachment.IsImage || string.IsNullOrWhiteSpace(attachment.DataUrl))
+                        continue;
+                    parts.Add(new JsonObject
+                    {
+                        ["type"] = "image_url",
+                        ["image_url"] = new JsonObject
+                        {
+                            ["url"] = attachment.DataUrl
+                        }
+                    });
+                }
+
+                item["content"] = parts;
+            }
             else
             {
                 item["content"] = message.Content;
@@ -1004,6 +1073,7 @@ public sealed class AiChatService
         builder.AppendLine("4. 回答简洁，先给结论，再给步骤。");
         builder.AppendLine("5. 不要主动切换用户正在看的页面。只有用户明确说“打开/跳转某个页面”时，才把 open_page、search_resource、install_version_note 的 navigate 参数设为 true；其余情况保持 false，只告诉用户页面位置。");
         builder.AppendLine("6. 用户只说“启动”“开游戏”时，直接调用 launch_game。");
+        builder.AppendLine("7. 需要看文件时先调用 list_files，再 read_file；只能访问工作目录或允许访问的文件夹，路径越界会被拒绝。");
         builder.AppendLine();
         builder.AppendLine("当前启动器环境：");
         builder.AppendLine(minecraft);

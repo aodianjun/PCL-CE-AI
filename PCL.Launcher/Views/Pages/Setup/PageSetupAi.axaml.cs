@@ -7,6 +7,7 @@ using PCL.Ai;
 using PCL.Core.App;
 using PCL.Core.App.Localization;
 using PCL.Core.Logging;
+using PCL.Core.UI;
 using PCL.Core.UI.Hints;
 using PCL.Navigation;
 using PCL.UI.Controls;
@@ -27,6 +28,8 @@ public partial class PageSetupAi : MyPageRight
     private readonly MyButton _btnSaveTest;
     private readonly MyButton _btnFetchModels;
     private readonly MyComboBox _comboModels;
+    private readonly MyTextBox _txtWorkDirectory;
+    private readonly MyTextBox _txtAllowedDirectories;
     private readonly MyTextBox _txtContextLimit;
     private readonly MyTextBox _txtMaxOutput;
     private readonly Dictionary<string, (int? Context, int? Output)> _modelMeta =
@@ -46,10 +49,14 @@ public partial class PageSetupAi : MyPageRight
         _btnSaveTest = this.FindControl<MyButton>("BtnSaveTest")!;
         _btnFetchModels = this.FindControl<MyButton>("BtnFetchModels")!;
         _comboModels = this.FindControl<MyComboBox>("ComboModels")!;
+        _txtWorkDirectory = this.FindControl<MyTextBox>("TxtWorkDirectory")!;
+        _txtAllowedDirectories = this.FindControl<MyTextBox>("TxtAllowedDirectories")!;
         _txtContextLimit = this.FindControl<MyTextBox>("TxtContextLimit")!;
         _txtMaxOutput = this.FindControl<MyTextBox>("TxtMaxOutput")!;
 
         _btnFetchModels.Click += FetchModels_OnClick;
+        this.FindControl<MyButton>("BtnPickWorkDirectory")!.Click += PickWorkDirectory_OnClick;
+        this.FindControl<MyButton>("BtnAddAllowedDirectory")!.Click += AddAllowedDirectory_OnClick;
         _comboModels.SelectionChanged += Models_OnSelectionChanged;
 
         this.FindControl<MyButton>("BtnSaveTest")!.Click += SaveAndTest_OnClick;
@@ -71,6 +78,8 @@ public partial class PageSetupAi : MyPageRight
         _txtApiKey.Text = Config.Ai.ApiKey;
         _chkEnableTools.Checked = Config.Ai.EnableTools;
         _chkAutoCrash.Checked = Config.Ai.AutoAnalyzeCrash;
+        _txtWorkDirectory.Text = Config.Ai.WorkDirectory;
+        _txtAllowedDirectories.Text = Config.Ai.AllowedDirectories;
         _txtContextLimit.Text = Config.Ai.ContextLimit.ToString();
         _txtMaxOutput.Text = Config.Ai.MaxOutputTokens.ToString();
 
@@ -105,6 +114,8 @@ public partial class PageSetupAi : MyPageRight
             Config.Ai.ApiKey = key;
             Config.Ai.EnableTools = _chkEnableTools.Checked == true;
             Config.Ai.AutoAnalyzeCrash = _chkAutoCrash.Checked == true;
+            Config.Ai.WorkDirectory = _txtWorkDirectory.Text?.Trim() ?? "";
+            Config.Ai.AllowedDirectories = _txtAllowedDirectories.Text?.Trim() ?? "";
             Config.Ai.ContextLimit = int.TryParse(_txtContextLimit.Text?.Trim(), out var contextLimit)
                 ? Math.Max(4000, contextLimit)
                 : 64000;
@@ -161,6 +172,28 @@ public partial class PageSetupAi : MyPageRight
         {
             _btnSaveTest.IsEnabled = true;
         }
+    }
+
+    private async void PickWorkDirectory_OnClick(object? sender, PointerReleasedEventArgs? e)
+    {
+        var folder = await SystemDialogs.SelectFolderAsync(
+            Lang.Text("Setup.Ai.WorkDirectory"));
+        if (!string.IsNullOrWhiteSpace(folder))
+            _txtWorkDirectory.Text = folder;
+    }
+
+    private async void AddAllowedDirectory_OnClick(object? sender, PointerReleasedEventArgs? e)
+    {
+        var folder = await SystemDialogs.SelectFolderAsync(
+            Lang.Text("Setup.Ai.AllowedDirectories"));
+        if (string.IsNullOrWhiteSpace(folder))
+            return;
+        var current = _txtAllowedDirectories.Text?.Trim() ?? "";
+        if (current.Length == 0)
+            _txtAllowedDirectories.Text = folder;
+        else if (!current.Split(';').Any(item =>
+                     string.Equals(item.Trim(), folder, StringComparison.OrdinalIgnoreCase)))
+            _txtAllowedDirectories.Text = current + ";" + folder;
     }
 
     private async void FetchModels_OnClick(object? sender, PointerReleasedEventArgs? e)

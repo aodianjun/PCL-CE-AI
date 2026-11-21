@@ -157,6 +157,8 @@ Release 构建默认不读运行时环境变量，必须在**编译期**把客�
 - 忙碌时标题栏显示 3 个不同速度旋转的草方块；模型的 `reasoning_content` 思考过程与每次工具调用（名称、参数、结果）都会以气泡展示，执行过程完全可见。
 - 思考与工具气泡在执行完成后自动折叠成一行标题，点击标题可展开/收起；推理模型在只输出思考时保持展开，正文开始后自动收起。
 - AI 工具默认不切换页面：`open_page`、`search_resource`、`install_version_note` 新增 `navigate` 参数（默认 false），只有用户明确要求打开页面时才为 true；`launch_game` 与崩溃分析也不再强制跳转启动页。
+- 「设置 → AI 接入」新增工作目录与允许访问文件夹。AI 工具新增 `get_work_directory`、`list_files`、`read_file`、`search_files`、`open_folder`，只能访问工作目录、允许文件夹、当前 Minecraft 目录与实例目录；越界路径直接拒绝。
+- 输入框支持图片与文本文件附件：图片以 data URL 走多模态 `image_url`，文本文件并入上下文；附件随用户消息显示文件名，最多 6 个。
 
 ## 九、仓库、反馈与作者
 

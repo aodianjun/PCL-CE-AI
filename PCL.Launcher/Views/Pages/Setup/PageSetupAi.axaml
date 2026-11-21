@@ -79,6 +79,36 @@
                                       Height="32" />
                     </Grid>
 
+                    <Grid Margin="0,4,0,6"
+                          ColumnDefinitions="Auto,20,*,Auto">
+                        <TextBlock VerticalAlignment="Center"
+                                   Text="{loc:Loc Setup.Ai.WorkDirectory}" />
+                        <ui:MyTextBox x:Name="TxtWorkDirectory"
+                                      Grid.Column="2"
+                                      Height="32" />
+                        <ui:MyButton x:Name="BtnPickWorkDirectory"
+                                     Grid.Column="3"
+                                     Height="32"
+                                     MinWidth="80"
+                                     Margin="8,0,0,0"
+                                     Text="{loc:Loc Setup.Ai.PickFolder}" />
+                    </Grid>
+                    <Grid Margin="0,0,0,6"
+                          ColumnDefinitions="Auto,20,*,Auto">
+                        <TextBlock VerticalAlignment="Center"
+                                   Text="{loc:Loc Setup.Ai.AllowedDirectories}" />
+                        <ui:MyTextBox x:Name="TxtAllowedDirectories"
+                                      Grid.Column="2"
+                                      Height="32"
+                                      HintText="{loc:Loc Setup.Ai.AllowedDirectories.Hint}" />
+                        <ui:MyButton x:Name="BtnAddAllowedDirectory"
+                                     Grid.Column="3"
+                                     Height="32"
+                                     MinWidth="80"
+                                     Margin="8,0,0,0"
+                                     Text="{loc:Loc Setup.Ai.AddFolder}" />
+                    </Grid>
+
                     <ui:MyCheckBox x:Name="ChkEnableTools"
                                    Height="24"
                                    Margin="-1,6,0,4"

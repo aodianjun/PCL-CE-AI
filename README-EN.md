@@ -16,6 +16,8 @@ PCL CE-AI lets the AI assistant drive the launcher: ask it to "launch the game",
 - **Visible process**: three rotating grass blocks appear while busy; reasoning content and every tool call (name, arguments, result) are shown as bubbles.
 - **Auto-collapse**: reasoning and tool execution collapse into a one-line header when finished; click to expand.
 - **No forced navigation**: the AI only reports where a page is by default; it switches pages only when you explicitly ask to open one.
+- **Working directory and file access**: choose a working directory and extra allowed folders in AI setup; the AI can list, read and search text files inside them, and rejects paths outside.
+- **Image and file input**: the attach button next to the input accepts images and text files; images require a vision-capable model, text files are sent as context.
 - **Only four controls at the bottom**: Settings (bottom-left), Account, Version, Launch.
 - **AI can**:
   - launch the game and switch versions

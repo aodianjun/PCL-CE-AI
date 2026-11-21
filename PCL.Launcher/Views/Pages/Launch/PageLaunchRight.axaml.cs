@@ -11,7 +11,9 @@ using PCL.Core.App;
 using PCL.Core.App.Localization;
 using PCL.Core.Logging;
 using PCL.Core.Minecraft.Profile;
+using PCL.Core.UI;
 using PCL.Core.UI.Dialogs;
+using PCL.Core.UI.Hints;
 using PCL.Navigation;
 using PCL.UI.Controls;
 
@@ -50,6 +52,8 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
     private readonly ContentControl _panDrawerHost;
     private readonly Grid _panConvLayer;
     private readonly StackPanel _panConversations;
+    private readonly WrapPanel _panPendingAttachments;
+    private readonly List<AiAttachment> _pendingAttachments = [];
 
     private PageLaunchLeftViewModel? _viewModel;
     private PageLaunchLeft? _leftPanel;
@@ -96,6 +100,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         _panDrawerHost = this.FindControl<ContentControl>("PanDrawerHost")!;
         _panConvLayer = this.FindControl<Grid>("PanConvLayer")!;
         _panConversations = this.FindControl<StackPanel>("PanConversations")!;
+        _panPendingAttachments = this.FindControl<WrapPanel>("PanPendingAttachments")!;
 
         _txtInput.AddHandler(
             InputElement.KeyDownEvent,
@@ -114,6 +119,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         this.FindControl<MyIconButton>("BtnCompress")!.Click += Compress_OnClick;
         this.FindControl<MyIconButton>("BtnNewChatInList")!.Click += NewChat_OnClick;
         this.FindControl<MyIconButton>("BtnCloseConv")!.Click += CloseConv_OnClick;
+        this.FindControl<MyIconButton>("BtnAttachFiles")!.Click += AttachFiles_OnClick;
         this.FindControl<MyIconButton>("BtnSettings")!.Click += Settings_OnClick;
         this.FindControl<MyButton>("BtnCancelLaunch")!.Click += CancelLaunch_OnClick;
         this.FindControl<MyIconButton>("BtnCloseDrawer")!.Click += CloseDrawer_OnClick;
@@ -397,7 +403,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
     private void SendCurrentInput()
     {
         var text = _txtInput.Text?.Trim() ?? "";
-        if (text.Length == 0)
+        if (text.Length == 0 && _pendingAttachments.Count == 0)
             return;
 
         if (!AiChatService.IsConfigured)
@@ -407,8 +413,150 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             return;
         }
 
+        if (AiChatService.Instance.IsBusy)
+        {
+            AddLocalBubble(Lang.Text("Launch.Ai.Compress.Busy"), true);
+            return;
+        }
+
+        var attachments = _pendingAttachments.ToList();
         _txtInput.Text = "";
-        _ = AiChatService.Instance.SendAsync(text);
+        _pendingAttachments.Clear();
+        RebuildPendingAttachments();
+        _ = AiChatService.Instance.SendAsync(
+            text.Length > 0 ? text : Lang.Text("Launch.Ai.Attachment.Placeholder"),
+            attachments);
+    }
+
+    private void AttachFiles_OnClick(object? sender, EventArgs e)
+    {
+        _ = AttachFilesAsync();
+    }
+
+    private async Task AttachFilesAsync()
+    {
+        const int maxAttachments = 6;
+        if (_pendingAttachments.Count >= maxAttachments)
+        {
+            HintService.Show(Hints.Warning(Lang.Text("Launch.Ai.Attachment.Limit")));
+            return;
+        }
+
+        var files = await SystemDialogs.SelectFilesAsync(
+            "图片|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp|文本文件|*.txt;*.md;*.json;*.log;*.yml;*.yaml;*.toml;*.ini;*.cfg;*.conf;*.xml;*.html;*.css;*.js;*.ts;*.cs;*.java;*.kt;*.py;*.sh;*.ps1;*.bat;*.csv;*.mcmeta;*.lang|所有文件|*.*",
+            Lang.Text("Launch.Ai.Attach"));
+        if (files.Length == 0)
+            return;
+
+        var imageExtensions = new[] { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" };
+        foreach (var file in files)
+        {
+            if (_pendingAttachments.Count >= maxAttachments)
+            {
+                HintService.Show(Hints.Warning(Lang.Text("Launch.Ai.Attachment.Limit")));
+                break;
+            }
+
+            try
+            {
+                var info = new FileInfo(file);
+                var extension = Path.GetExtension(file).ToLowerInvariant();
+                if (imageExtensions.Contains(extension))
+                {
+                    if (info.Length > 8 * 1024 * 1024)
+                    {
+                        HintService.Show(Hints.Warning(
+                            Lang.Text("Launch.Ai.Attachment.TooLarge", info.Name)));
+                        continue;
+                    }
+
+                    var mime = extension switch
+                    {
+                        ".png" => "image/png",
+                        ".gif" => "image/gif",
+                        ".webp" => "image/webp",
+                        ".bmp" => "image/bmp",
+                        _ => "image/jpeg"
+                    };
+                    var data = Convert.ToBase64String(File.ReadAllBytes(file));
+                    _pendingAttachments.Add(new AiAttachment
+                    {
+                        Name = info.Name,
+                        IsImage = true,
+                        DataUrl = $"data:{mime};base64,{data}"
+                    });
+                    continue;
+                }
+
+                if (info.Length > 1024 * 1024)
+                {
+                    HintService.Show(Hints.Warning(
+                        Lang.Text("Launch.Ai.Attachment.TooLarge", info.Name)));
+                    continue;
+                }
+
+                var text = File.ReadAllText(file);
+                if (text.Length > 200000)
+                    text = text[..200000] + Environment.NewLine + "…（已截断）";
+                _pendingAttachments.Add(new AiAttachment
+                {
+                    Name = info.Name,
+                    TextContent = text
+                });
+            }
+            catch (Exception ex)
+            {
+                HintService.Show(Hints.Warning(
+                    Lang.Text("Launch.Ai.Attachment.Failed", ex.Message)));
+            }
+        }
+
+        RebuildPendingAttachments();
+    }
+
+    private void RebuildPendingAttachments()
+    {
+        _panPendingAttachments.Children.Clear();
+        _panPendingAttachments.IsVisible = _pendingAttachments.Count > 0;
+        foreach (var attachment in _pendingAttachments.ToList())
+        {
+            var label = new TextBlock
+            {
+                Text = (attachment.IsImage ? "🖼 " : "📎 ") + attachment.Name,
+                FontSize = 11,
+                MaxWidth = 180,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var remove = new MyIconButton
+            {
+                Width = 18,
+                Height = 18,
+                LogoScale = 0.7,
+                SvgIcon = "lucide/x"
+            };
+            remove.Click += (_, _) =>
+            {
+                _pendingAttachments.Remove(attachment);
+                RebuildPendingAttachments();
+            };
+            var chipPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 4
+            };
+            chipPanel.Children.Add(label);
+            chipPanel.Children.Add(remove);
+            var chip = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(30, 128, 128, 128)),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(8, 3),
+                Margin = new Thickness(0, 0, 6, 6),
+                Child = chipPanel
+            };
+            _panPendingAttachments.Children.Add(chip);
+        }
     }
 
     private void CancelReply_OnClick(object? sender, EventArgs e)
@@ -723,7 +871,19 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
 
         if (message.Role == AiRole.User)
         {
-            content.Text = message.Content;
+            var display = message.Content ?? "";
+            if (message.Attachments.Count > 0)
+            {
+                var names = string.Join(
+                    Environment.NewLine,
+                    message.Attachments.Select(attachment =>
+                        (attachment.IsImage ? "🖼 " : "📎 ") + attachment.Name));
+                display = string.IsNullOrWhiteSpace(display)
+                    ? names
+                    : display + Environment.NewLine + names;
+            }
+
+            content.Text = display;
             content.Classes.Add("AiBubbleTextUser");
             border.Classes.Add("AiBubbleUser");
             panel.Children.Add(content);
@@ -733,7 +893,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             var label = Lang.Text("Launch.Ai.ToolExecution", message.ToolName ?? "tool");
             var header = new TextBlock
             {
-                Text = "▸ " + label,
+                Text = "▶ " + label,
                 FontSize = 11.5,
                 Opacity = 0.85
             };
@@ -749,7 +909,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
                 if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
                     return;
                 body.IsVisible = !body.IsVisible;
-                header.Text = (body.IsVisible ? "▾ " : "▸ ") + label;
+                header.Text = (body.IsVisible ? "▼ " : "▶ ") + label;
                 e.Handled = true;
             };
             panel.Children.Add(header);
@@ -813,7 +973,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             bubble.ReasoningBody.IsVisible = expanded;
             if (bubble.ReasoningHeader is not null)
                 bubble.ReasoningHeader.Text =
-                    (expanded ? "▾ " : "▸ ") + Lang.Text("Launch.Ai.Reasoning");
+                    (expanded ? "▼ " : "▶ ") + Lang.Text("Launch.Ai.Reasoning");
         }
     }
 
@@ -827,7 +987,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         bubble.ReasoningManuallyToggled = true;
         if (bubble.ReasoningHeader is not null)
             bubble.ReasoningHeader.Text =
-                (expanded ? "▾ " : "▸ ") + Lang.Text("Launch.Ai.Reasoning");
+                (expanded ? "▼ " : "▶ ") + Lang.Text("Launch.Ai.Reasoning");
     }
 
     private static string ComposeToolBody(AiChatMessage message)
