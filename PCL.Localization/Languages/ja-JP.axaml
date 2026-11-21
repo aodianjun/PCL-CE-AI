@@ -93,4 +93,6 @@
     <sys:String x:Key="Launch.Account.Microsoft.Error.ClientIdMissing">This build has no Microsoft OAuth client ID (PCL_MS_CLIENT_ID) configured, so Microsoft sign-in is unavailable. Go back and use offline or third-party login; official release builds include this configuration.</sys:String>
     <sys:String x:Key="Minecraft.Launch.Login.Microsoft.AppNotApproved.Message">This Azure app has not been approved by Mojang for the Minecraft API (invalid app registration). Submit it for review first; Microsoft sign-in cannot complete until it is approved.</sys:String>
     <sys:String x:Key="Minecraft.Launch.Login.Microsoft.AppNotApproved.Open">Open review page</sys:String>
+    <sys:String x:Key="Setup.Update.Source.GitHub">Update source: GitHub · aodianjun/PCL-CE-AI</sys:String>
+    <sys:String x:Key="Setup.Update.NoRelease">No releases on GitHub yet; this is a local build.</sys:String>
 </ResourceDictionary>

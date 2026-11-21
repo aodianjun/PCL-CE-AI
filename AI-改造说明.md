@@ -139,7 +139,13 @@ Release 构建默认不读运行时环境变量，必须在**编译期**把客�
 
 说明：公共客户端的客户端 ID 会随二进制公开，这不是密钥；不要往应用里放 client secret。所有使用该构建的玩家都会共享你注册的这个 Azure 应用的配额。官方 PCL CE-AI 的客户端 ID 属于其发布方，本项目不会去提取或借用。
 
-## 七、回滚
+## 七、软件信息与更新
+
+- 「设置 → 关于」产品名改为 PCL CE-AI，GitHub 主页、源代码、贡献者链接均指向 `https://github.com/aodianjun/PCL-CE-AI`；原作者的署名与许可证保持不变。
+- 「设置 → 更新」改为 GitHub Releases 更新源：检查 `aodianjun/PCL-CE-AI` 的最新 Release，有更新时显示版本与更新日志，按钮直接打开 Release 页面。
+- 启动时不再连接 PCL CE 官方更新源（MirrorChyan / pysio / naids），避免把 AI 构建自动替换成官方版本。原来的更新通道、自动更新、MirrorChyan CDK 设置卡片已隐藏。
+
+## 八、回滚
 
 所有改动都在工作区，没有数据库迁移、没有改存档。回滚步骤：
 

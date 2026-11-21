@@ -3766,4 +3766,6 @@
     <sys:String x:Key="Launch.Account.Microsoft.Error.ClientIdMissing">当前构建没有配置微软登录的客户端 ID（PCL_MS_CLIENT_ID），正版登录不可用。请返回后使用离线登录或第三方登录；官方发布版已内置该配置。</sys:String>
     <sys:String x:Key="Minecraft.Launch.Login.Microsoft.AppNotApproved.Message">这个 Azure 应用还没有获得 Mojang 的 Minecraft API 授权（Invalid app registration）。请先提交应用审核，通过之前无法完成正版登录。</sys:String>
     <sys:String x:Key="Minecraft.Launch.Login.Microsoft.AppNotApproved.Open">打开审核页面</sys:String>
+    <sys:String x:Key="Setup.Update.Source.GitHub">更新来源：GitHub · aodianjun/PCL-CE-AI</sys:String>
+    <sys:String x:Key="Setup.Update.NoRelease">GitHub 上暂无发布版本，当前为本地构建。</sys:String>
 </ResourceDictionary>

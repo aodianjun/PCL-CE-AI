@@ -16,7 +16,7 @@ namespace PCL;
 public partial class PageSetupAboutViewModel : ViewModelBase
 {
     private const string ContributorsApi =
-        "https://api.github.com/repos/PCL-Community/PCL2-CE/contributors";
+        "https://api.github.com/repos/aodianjun/PCL-CE-AI/contributors";
 
     private int _clickCount;
 

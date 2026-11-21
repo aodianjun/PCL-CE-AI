@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PCL.Core.App;
 using PCL.Core.App.Localization;
@@ -13,9 +14,14 @@ namespace PCL;
 /// <summary>设置页面中「更新」页的视图模型。</summary>
 public partial class PageSetupUpdateViewModel : ViewModelBase
 {
+    private const string GitHubRepo = "aodianjun/PCL-CE-AI";
+    private const string GitHubReleasesApi = "https://api.github.com/repos/" + GitHubRepo + "/releases/latest";
+    private const string GitHubReleasesPage = "https://github.com/" + GitHubRepo + "/releases";
+
     private string _changelogSummary = string.Empty;
 
     private bool _checking;
+    private string? _releaseUrl;
 
     private object?[] _descArgs = [];
     private string _descKey = "Setup.Update.Checking";
@@ -105,6 +111,7 @@ public partial class PageSetupUpdateViewModel : ViewModelBase
     public void Reload()
     {
         CurrentVersionText = "PCL CE-AI " + VersionNameFormat(LauncherCommon.VersionBaseName);
+        SetStatusText("Setup.Update.Source.GitHub");
         MirrorChyanKey = Config.Update.MirrorChyanKey;
         UpdateModeIndex = Math.Clamp((int)Config.Update.UpdateMode, 0, 3);
         SetUpdateButtonState(InstallButtonState);
@@ -119,46 +126,45 @@ public partial class PageSetupUpdateViewModel : ViewModelBase
         ShowCheckCard = true;
         SetStatusText("Setup.Update.Checking");
         CheckAgainEnabled = false;
+        _releaseUrl = null;
         try
         {
-            var channel = UpdateManager.IsCurrentVersionBeta
-                ? UpdateSourceChannel.Beta
-                : UpdateSourceChannel.Stable;
-            var arch = SystemInfo.IsArm64System ? UpdateArch.Arm64 : UpdateArch.X64;
-            var isLatest = await UpdateManager.remoteServer.IsLatestAsync(
-                channel,
-                arch,
-                SemVer.Parse(LauncherCommon.VersionBaseName),
-                LauncherCommon.VersionCode);
-            if (isLatest)
+            using var http = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(20)
+            };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("PCL-CE-AI");
+            using var response = await http.GetAsync(GitHubReleasesApi);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                SetStatusText("Setup.Update.NoRelease");
+                return;
+            }
+
+            response.EnsureSuccessStatusCode();
+            var json = JsonNode.Parse(await response.Content.ReadAsStringAsync());
+            var tag = json?["tag_name"]?.ToString() ?? "";
+            var body = json?["body"]?.ToString() ?? "";
+            var url = json?["html_url"]?.ToString() ?? GitHubReleasesPage;
+
+            if (string.IsNullOrWhiteSpace(tag) || !IsNewerVersion(tag, LauncherCommon.VersionBaseName))
             {
                 SetStatusText("Setup.Update.Latest");
                 return;
             }
 
-            var version = await Task.Run(() =>
-                UpdateManager.remoteServer.GetLatestVersion(channel, arch));
-            _latestVersion = version;
-            UpdateNameText = "PCL CE-AI " + VersionNameFormat(version.VersionName);
-            _changelogSummary = ExtractSummary(version.Changelog);
+            _releaseUrl = url;
+            _latestVersion = new VersionDataModel
+            {
+                Changelog = body,
+                VersionName = tag.TrimStart('v', 'V'),
+                Source = "GitHub"
+            };
+            UpdateNameText = "PCL CE-AI " + VersionNameFormat(tag);
+            _changelogSummary = BuildGithubSummary(body);
             OnPropertyChanged(nameof(ChangelogText));
-
-            if (UpdateManager.updateLoader is { State: LoadState.Loading })
-            {
-                UpdateButtonEnabled = false;
-                _ = MonitorAndRestoreAsync();
-            }
-            else if (UpdateManager.isUpdateWaitingRestart)
-            {
-                SetUpdateButtonState(UpdateButtonState.RestartInstall);
-                UpdateButtonEnabled = !IsFlatpak;
-            }
-            else
-            {
-                SetUpdateButtonState(InstallButtonState);
-                UpdateButtonEnabled = !IsFlatpak;
-            }
-
+            SetExternalUpdateButtonText("Setup.Update.OpenDownload");
+            UpdateButtonEnabled = true;
             ShowUpdateCard = true;
             ShowCheckCard = false;
         }
@@ -178,11 +184,39 @@ public partial class PageSetupUpdateViewModel : ViewModelBase
         }
     }
 
+    private static bool IsNewerVersion(string tag, string currentVersion)
+    {
+        static Version? Parse(string value)
+        {
+            value = value.Trim().TrimStart('v', 'V');
+            var core = value.Split('-', '+')[0];
+            return Version.TryParse(core, out var version) ? version : null;
+        }
+
+        var remote = Parse(tag);
+        var local = Parse(currentVersion);
+        return remote is not null && local is not null && remote > local;
+    }
+
+    private static string BuildGithubSummary(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return string.Empty;
+        var text = body.Trim();
+        return text.Length <= 400 ? text : text[..400] + "…";
+    }
+
     /// <summary>点击安装：等待重启时直接重启安装，否则启动更新并轮询下载进度。</summary>
     public async Task StartUpdateAsync()
     {
         if (IsFlatpak)
             return;
+
+        if (!string.IsNullOrEmpty(_releaseUrl))
+        {
+            Basics.OpenPath(_releaseUrl);
+            return;
+        }
 
         if (!UpdatePolicies.Current.SupportsInAppUpdate)
         {
@@ -292,9 +326,7 @@ public partial class PageSetupUpdateViewModel : ViewModelBase
 
     public static void OpenReleasesPage()
     {
-        Basics.OpenPath(
-            "https://github.com/PCL-Community/PCL2-CE/releases/v"
-            + LauncherCommon.VersionBaseName);
+        Basics.OpenPath(GitHubReleasesPage);
     }
 
     /// <summary>切换更新通道；返回 false 表示用户取消，调用方需要把下拉恢复原值。</summary>

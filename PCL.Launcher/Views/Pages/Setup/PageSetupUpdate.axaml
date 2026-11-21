@@ -10,7 +10,8 @@
                        HorizontalScrollBarVisibility="Disabled"
                        VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="25,25,25,10">
-            <ui:MyCard>
+            <ui:MyCard x:Name="CardUpdateSettings"
+                       IsVisible="False">
                 <StackPanel Margin="20,15,20,15">
                     <Grid RowDefinitions="28,7,28,7,28">
                         <Grid.ColumnDefinitions>
@@ -94,7 +95,7 @@
                                     Height="50"
                                     HorizontalAlignment="Left"
                                     VerticalAlignment="Center"
-                                    Source="https://www.pclc.cc/img/pcl-ce/icon.webp" />
+                                    Source="avares://PCL.Launcher/Assets/Images/icon.png" />
                         <TextBlock x:Name="TextUpdateName"
                                    Grid.Row="0"
                                    Grid.Column="2"
@@ -107,7 +108,7 @@
                                    Grid.Row="2"
                                    Grid.Column="2"
                                    FontSize="14"
-                                   Text="by PCL-Community"
+                                   Text="by aodianjun · GitHub"
                                    HorizontalAlignment="Left"
                                    VerticalAlignment="Top" />
                         <ui:MyButton x:Name="BtnUpdate"

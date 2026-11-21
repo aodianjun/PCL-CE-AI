@@ -154,7 +154,8 @@ public sealed class StartupEffects(
         try
         {
             GameDownload.dlClientListMojangLoader.Start(1);
-            UpdateManager.serverLoader.Start(1);
+            // PCL CE-AI 使用 GitHub Releases 手动检查更新，不再连接官方更新源。
+            // UpdateManager.serverLoader.Start(1);
             States.System.StartupCount += 1;
         }
         catch (Exception ex)
