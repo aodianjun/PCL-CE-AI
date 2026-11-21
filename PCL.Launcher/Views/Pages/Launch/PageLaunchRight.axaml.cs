@@ -77,7 +77,10 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         _panConvLayer = this.FindControl<Grid>("PanConvLayer")!;
         _panConversations = this.FindControl<StackPanel>("PanConversations")!;
 
-        _txtInput.KeyDown += Input_OnKeyDown;
+        _txtInput.AddHandler(
+            InputElement.KeyDownEvent,
+            Input_OnKeyDown,
+            RoutingStrategies.Tunnel);
         PanScroll = _sclChat;
 
         _btnLaunch.Click += Launch_OnClick;

@@ -23,6 +23,14 @@ public static class AiTools
     {
         JsonArray Array(params JsonObject[] items) => new(items);
 
+        JsonArray Required(params string[] names)
+        {
+            var array = new JsonArray();
+            foreach (var name in names)
+                array.Add(name);
+            return array;
+        }
+
         JsonObject Tool(string name, string description, JsonObject properties, JsonArray? required = null)
         {
             var parameters = new JsonObject
@@ -72,7 +80,7 @@ public static class AiTools
                 {
                     ["name"] = Str("要切换到的版本名称，必须与 list_instances 返回的名称完全一致")
                 },
-                Array(Str("name"))),
+                Required("name")),
             Tool(
                 "launch_game",
                 "使用当前选中的版本和账号启动 Minecraft。",
@@ -89,7 +97,7 @@ public static class AiTools
                     ["file"] = Str("Mod 文件名，例如 sodium-1.21.1.jar"),
                     ["enabled"] = Bool("true 表示启用，false 表示禁用")
                 },
-                Array(Str("file"), Str("enabled"))),
+                Required("file", "enabled")),
             Tool(
                 "delete_mod",
                 "永久删除当前版本 mods 文件夹中的某个 Mod。必须先得到用户明确确认。",
@@ -97,7 +105,7 @@ public static class AiTools
                 {
                     ["file"] = Str("要删除的 Mod 文件名")
                 },
-                Array(Str("file"))),
+                Required("file")),
             Tool(
                 "open_page",
                 "在启动器中打开指定页面。可选值：launch、download、mod、modpack、resourcepack、shader、world、datapack、favorites、tools、settings、instance_settings、instance_select、logs、tasks。",
@@ -105,7 +113,7 @@ public static class AiTools
                 {
                     ["page"] = Str("页面标识")
                 },
-                Array(Str("page"))),
+                Required("page")),
             Tool(
                 "search_resource",
                 "打开资源下载页并按游戏版本/加载器筛选。",
@@ -115,7 +123,7 @@ public static class AiTools
                     ["game_version"] = Str("可选，目标 Minecraft 版本，例如 1.21.1"),
                     ["loader"] = Str("可选，加载器：forge、neoforge、fabric、quilt、liteloader、cleanroom")
                 },
-                Array(Str("type"))),
+                Required("type")),
             Tool(
                 "get_game_log",
                 "读取当前版本最近一次游戏的日志（latest.log 末尾若干行）。",

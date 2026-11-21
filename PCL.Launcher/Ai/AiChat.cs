@@ -325,7 +325,7 @@ public sealed class AiChatService
         catch (Exception ex)
         {
             LastError = ex.Message;
-            LogWrapper.Error(ex, "Ai", "压缩上下文失败");
+            LogWrapper.Warn("Ai", "压缩上下文失败：" + ex.Message);
             AddMessage(new AiChatMessage
             {
                 Role = AiRole.Assistant,
@@ -610,7 +610,7 @@ public sealed class AiChatService
         catch (Exception ex)
         {
             LastError = ex.Message;
-            LogWrapper.Error(ex, "Ai", "AI 请求失败");
+            LogWrapper.Warn("Ai", "AI 请求失败：" + ex.Message);
             AddMessage(new AiChatMessage
             {
                 Role = AiRole.Assistant,
