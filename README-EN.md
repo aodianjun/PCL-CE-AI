@@ -12,7 +12,8 @@ PCL CE-AI lets the AI assistant drive the launcher: ask it to "launch the game",
 - **Context compression**: compress manually, or automatically summarize when the context grows too long.
 - **Context usage**: the chat header shows estimated tokens / limit / percentage; click for details.
 - **Model list and auto parameters**: fetch `/models` in AI setup; selecting a model fills the context limit and max output automatically.
-- **Background execution**: tool calls, log reads and streaming run on background threads; each tool times out after 60s and the stream after 90s of silence.
+- **Background execution**: tool calls, log reads and streaming run on background threads; each tool times out after 60s, and the model after 60s without a response or 90s of stream silence.
+- **Visible process**: a rotating grass block appears while busy; reasoning content and every tool call (name, arguments, result) are shown as bubbles.
 - **Only four controls at the bottom**: Settings (bottom-left), Account, Version, Launch.
 - **AI can**:
   - launch the game and switch versions

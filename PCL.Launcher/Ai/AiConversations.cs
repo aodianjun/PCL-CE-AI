@@ -55,6 +55,8 @@ internal sealed class AiMessageDto
 
     public bool IsError { get; set; }
 
+    public string? Reasoning { get; set; }
+
     public DateTime CreatedAt { get; set; }
 }
 
@@ -111,6 +113,7 @@ internal static class AiConversationStore
                         Role = ParseRole(message.Role),
                         Content = message.Content,
                         IsError = message.IsError,
+                        Reasoning = message.Reasoning,
                         CreatedAt = message.CreatedAt == default ? DateTime.Now : message.CreatedAt
                     });
                 }
@@ -164,6 +167,7 @@ internal static class AiConversationStore
                         },
                         Content = message.Content,
                         IsError = message.IsError,
+                        Reasoning = message.Reasoning,
                         CreatedAt = message.CreatedAt
                     });
                 }

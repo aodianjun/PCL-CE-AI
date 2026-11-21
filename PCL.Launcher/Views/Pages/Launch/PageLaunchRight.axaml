@@ -44,6 +44,18 @@
             <Setter Property="Foreground"
                     Value="White" />
         </Style>
+        <Style Selector="Border.AiBubbleTool">
+            <Setter Property="Background"
+                    Value="{DynamicResource ColorBrushToolTip}" />
+            <Setter Property="Opacity"
+                    Value="0.9" />
+        </Style>
+        <Style Selector="TextBlock.AiBubbleToolText">
+            <Setter Property="FontSize"
+                    Value="11.5" />
+            <Setter Property="Opacity"
+                    Value="0.85" />
+        </Style>
     </ui:MyPageRight.Styles>
 
     <Grid x:Name="PanRoot"
@@ -66,6 +78,17 @@
                     <TextBlock FontSize="15"
                                VerticalAlignment="Center"
                                Text="{loc:Loc Launch.Ai.Title}" />
+                    <Image x:Name="ImgThinking"
+                           Width="20"
+                           Height="20"
+                           IsVisible="False"
+                           Source="avares://PCL.Launcher/Assets/Images/Blocks/Grass.png"
+                           Stretch="Uniform"
+                           RenderTransformOrigin="0.5,0.5">
+                        <Image.RenderTransform>
+                            <RotateTransform />
+                        </Image.RenderTransform>
+                    </Image>
                     <Border Padding="7,2"
                             CornerRadius="4"
                             Background="{DynamicResource ColorBrushToolTip}">

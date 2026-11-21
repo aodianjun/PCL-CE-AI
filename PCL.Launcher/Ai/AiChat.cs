@@ -48,6 +48,12 @@ public sealed class AiChatMessage
     /// <summary>工具名称。</summary>
     public string? ToolName { get; init; }
 
+    /// <summary>工具调用参数（原始 JSON）。</summary>
+    public string? ToolArguments { get; init; }
+
+    /// <summary>模型的思考过程（reasoning_content）。</summary>
+    public string Reasoning { get; set; } = "";
+
     /// <summary>助手消息中请求的工具调用。</summary>
     public List<AiToolCall> ToolCalls { get; } = [];
 
@@ -676,6 +682,12 @@ public sealed class AiChatService
                 return;
             }
 
+            if (string.IsNullOrWhiteSpace(assistant.Content))
+            {
+                assistant.Content = Lang.Text("Launch.Ai.ToolCalling");
+                NotifyUpdated(assistant);
+            }
+
             foreach (var call in assistant.ToolCalls)
             {
                 ct.ThrowIfCancellationRequested();
@@ -695,6 +707,7 @@ public sealed class AiChatService
                     Role = AiRole.Tool,
                     ToolCallId = call.Id,
                     ToolName = call.Name,
+                    ToolArguments = call.Arguments,
                     Content = result
                 });
             }
@@ -722,10 +735,22 @@ public sealed class AiChatService
             Config.Ai.ApiKey.Trim());
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
 
-        using var response = await _http.SendAsync(
-            request,
-            HttpCompletionOption.ResponseHeadersRead,
-            ct);
+        using var firstByteCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        firstByteCts.CancelAfter(TimeSpan.FromSeconds(60));
+        HttpResponseMessage response;
+        try
+        {
+            response = await _http.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                firstByteCts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException("模型 60 秒内没有响应，已中断本次请求。");
+        }
+
+        using var responseScope = response;
 
         if (!response.IsSuccessStatusCode)
         {
@@ -787,6 +812,14 @@ public sealed class AiChatService
             var delta = node?["choices"]?[0]?["delta"];
             if (delta is null)
                 continue;
+
+            var reasoning = delta["reasoning_content"]?.ToString()
+                            ?? delta["reasoning"]?.ToString();
+            if (!string.IsNullOrEmpty(reasoning))
+            {
+                assistant.Reasoning += reasoning;
+                NotifyUpdated(assistant);
+            }
 
             var content = delta["content"]?.ToString();
             if (!string.IsNullOrEmpty(content))

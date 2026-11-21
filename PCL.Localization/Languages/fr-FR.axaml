@@ -535,4 +535,8 @@
     <sys:String x:Key="Launch.Ai.Context.Percent">Used: {0}%</sys:String>
     <sys:String x:Key="Launch.Ai.Context.Threshold">Compression threshold: {0} characters</sys:String>
     <sys:String x:Key="Launch.Ai.Context.HasSummary">Has summary: {0}</sys:String>
+    <sys:String x:Key="Launch.Ai.Thinking">Thinking...</sys:String>
+    <sys:String x:Key="Launch.Ai.ToolCalling">Calling tools...</sys:String>
+    <sys:String x:Key="Launch.Ai.Reasoning">Reasoning</sys:String>
+    <sys:String x:Key="Launch.Ai.ToolExecution">Tool: {0}</sys:String>
 </ResourceDictionary>

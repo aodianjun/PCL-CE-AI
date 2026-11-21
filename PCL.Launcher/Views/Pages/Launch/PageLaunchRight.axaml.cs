@@ -41,6 +41,10 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
     private readonly MyIconButton _btnCancelReply;
     private readonly TextBlock _labModel;
     private readonly TextBlock _labContextUsage;
+    private readonly Image _imgThinking;
+    private readonly DispatcherTimer _thinkingTimer;
+    private readonly RotateTransform _thinkingRotate = new();
+    private double _thinkingAngle;
     private readonly TextBlock _labLaunchingStage;
     private readonly ProgressBar _barLaunch;
     private readonly Grid _panDrawerLayer;
@@ -70,6 +74,17 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         _btnCancelReply = this.FindControl<MyIconButton>("BtnCancelReply")!;
         _labModel = this.FindControl<TextBlock>("LabModel")!;
         _labContextUsage = this.FindControl<TextBlock>("LabContextUsage")!;
+        _imgThinking = this.FindControl<Image>("ImgThinking")!;
+        _imgThinking.RenderTransform = _thinkingRotate;
+        _thinkingTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(40)
+        };
+        _thinkingTimer.Tick += (_, _) =>
+        {
+            _thinkingAngle = (_thinkingAngle + 12) % 360;
+            _thinkingRotate.Angle = _thinkingAngle;
+        };
         _labLaunchingStage = this.FindControl<TextBlock>("LabLaunchingStage")!;
         _barLaunch = this.FindControl<ProgressBar>("BarLaunch")!;
         _panDrawerLayer = this.FindControl<Grid>("PanDrawerLayer")!;
@@ -577,7 +592,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         {
             if (_bubbles.TryGetValue(message, out var text))
             {
-                text.Text = message.Content;
+                text.Text = ComposeMessageText(message);
                 ScrollToEnd();
             }
         });
@@ -602,7 +617,21 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
 
     private void OnAiBusyChanged(bool busy)
     {
-        Dispatcher.UIThread.Post(UpdateSendState);
+        Dispatcher.UIThread.Post(() =>
+        {
+            UpdateSendState();
+            _imgThinking.IsVisible = busy;
+            if (busy)
+            {
+                _thinkingTimer.Start();
+            }
+            else
+            {
+                _thinkingTimer.Stop();
+                _thinkingAngle = 0d;
+                _thinkingRotate.Angle = 0d;
+            }
+        });
     }
 
     private void OnAiStatusChanged(string? status)
@@ -646,14 +675,12 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
     {
         if (message.IsHidden)
             return;
-        if (message.Role == AiRole.Tool)
-            return;
         if (_bubbles.ContainsKey(message))
             return;
 
         var text = new TextBlock
         {
-            Text = message.Content,
+            Text = ComposeMessageText(message),
             Classes = { "AiBubbleText" },
             MaxWidth = 620
         };
@@ -669,6 +696,11 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             border.Classes.Add("AiBubbleUser");
             text.Classes.Add("AiBubbleTextUser");
         }
+        else if (message.Role == AiRole.Tool)
+        {
+            border.Classes.Add("AiBubbleTool");
+            text.Classes.Add("AiBubbleToolText");
+        }
         else
         {
             border.Classes.Add(message.IsError ? "AiBubbleError" : "AiBubbleAssistant");
@@ -679,6 +711,35 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         _panMessages.Children.Add(border);
         if (scroll)
             ScrollToEnd();
+    }
+
+    private static string ComposeMessageText(AiChatMessage message)
+    {
+        var nl = Environment.NewLine;
+        if (message.Role == AiRole.Tool)
+        {
+            var args = string.IsNullOrWhiteSpace(message.ToolArguments)
+                ? ""
+                : nl + message.ToolArguments;
+            var result = message.Content ?? "";
+            if (result.Length > 8000)
+                result = result[..8000] + nl + "…（已截断）";
+            return Lang.Text("Launch.Ai.ToolExecution", message.ToolName ?? "tool")
+                   + args + nl + "→" + nl + result;
+        }
+
+        var content = message.Content ?? "";
+        if (message.Role == AiRole.Assistant && !string.IsNullOrWhiteSpace(message.Reasoning))
+        {
+            var reasoning = Lang.Text("Launch.Ai.Reasoning") + nl + message.Reasoning.Trim();
+            return string.IsNullOrWhiteSpace(content)
+                ? reasoning
+                : reasoning + nl + nl + content;
+        }
+
+        if (message.Role == AiRole.Assistant && string.IsNullOrWhiteSpace(content))
+            return Lang.Text("Launch.Ai.Thinking");
+        return content;
     }
 
     private void AddLocalBubble(string text, bool error)
