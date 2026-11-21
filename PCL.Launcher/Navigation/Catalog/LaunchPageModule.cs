@@ -12,7 +12,7 @@ public sealed class LaunchPageModule : IPageModule
             "Main.Title.Launch",
             "lucide/play",
             MainTab.Launch,
-            300d,
+            0d,
             null,
             [],
             [],

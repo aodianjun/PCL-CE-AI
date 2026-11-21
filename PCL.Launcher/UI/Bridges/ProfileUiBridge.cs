@@ -212,6 +212,25 @@ public sealed class ProfileUiBridge : IProfileUi
         return true;
     }
 
+    public bool HandleMicrosoftAppNotApprovedError(
+        IdentityModelAuthenticationException exception)
+    {
+        if (!string.Equals(
+                exception.Error,
+                "minecraft_app_not_approved",
+                StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var result = UiInteraction.MessageBlockingOnWorkerThread(
+            Lang.Text("Minecraft.Launch.Login.Microsoft.AppNotApproved.Message"),
+            Lang.Text("Minecraft.Launch.Login.Failed"),
+            Lang.Text("Minecraft.Launch.Login.Microsoft.AppNotApproved.Open"),
+            Lang.Text("Common.Action.Cancel"));
+        if (result == 1)
+            UiInteraction.OpenWebsite("https://aka.ms/mce-reviewappid");
+        return true;
+    }
+
     public bool HandleMicrosoftCreateProfileError(
         IdentityModelAuthenticationException exception)
     {

@@ -48,6 +48,8 @@ public static class SubPageIds
         "DownloadLegacyFabric");
 
     public static readonly SubPageId SetupLaunch = new(PageIds.Setup, "SetupLaunch");
+    public static readonly SubPageId SetupAi = new(PageIds.Setup, "SetupAi");
+    public static readonly SubPageId SetupFeatures = new(PageIds.Setup, "SetupFeatures");
     public static readonly SubPageId SetupUi = new(PageIds.Setup, "SetupUi");
     public static readonly SubPageId SetupGameManage = new(PageIds.Setup, "SetupGameManage");
     public static readonly SubPageId SetupLink = new(PageIds.Setup, "SetupLink");

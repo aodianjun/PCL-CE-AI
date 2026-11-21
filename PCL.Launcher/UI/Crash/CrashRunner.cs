@@ -90,6 +90,20 @@ internal static class CrashPresenter
         BringMainWindowToFront();
 
         var crashContent = CrashResultFormatter.Format(context, isHandAnalyze);
+
+        // 崩溃报告自动提交给启动页的 AI 助手，用户回到首页就能看到分析。
+        if (Config.Ai.AutoAnalyzeCrash && !string.IsNullOrWhiteSpace(crashContent.Text))
+        {
+            try
+            {
+                Ai.AiChatService.Instance.SubmitCrashReport(crashContent.Text);
+            }
+            catch (Exception ex)
+            {
+                LogWrapper.Warn("Crash", "提交崩溃报告给 AI 失败：" + ex.Message);
+            }
+        }
+
         var directFile = context.DirectOpenFile;
         var openInstanceSettings = context.Instance is not null
             && crashContent.SuggestedAction

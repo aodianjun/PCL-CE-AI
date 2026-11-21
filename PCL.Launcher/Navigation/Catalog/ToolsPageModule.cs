@@ -47,13 +47,6 @@ public sealed class ToolsPageModule : IPageModule
             (sp, descriptor) => ActivatorUtilities.CreateInstance<ToolsPageHost>(sp, descriptor))
     ];
 
-    public IReadOnlyList<MainTabDescriptor> MainTabs { get; } =
-    [
-        new(
-            MainTab.Tools,
-            PageIds.Tools,
-            "Main.Tab.Tools",
-            "lucide/wrench",
-            3)
-    ];
+    /// <summary>工具入口已收进设置页，不再占据标题栏。</summary>
+    public IReadOnlyList<MainTabDescriptor> MainTabs { get; } = [];
 }

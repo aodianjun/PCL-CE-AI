@@ -255,6 +255,9 @@ public partial class TitleBar : UserControl
         PanTitleSelect.Children.Clear();
         _tabButtons.Clear();
 
+        // 纯 AI 启动页只保留一个主入口，标题栏不再显示多余标签。
+        PanTitleSelect.IsVisible = PageCatalog.MainTabs.Count > 1;
+
         foreach (var descriptor in PageCatalog.MainTabs.OrderBy(tab => tab.Order))
         {
             var button = new MyRadioButton

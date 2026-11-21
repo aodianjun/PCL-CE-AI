@@ -3,45 +3,243 @@
                 xmlns:ui="using:PCL.UI.Controls"
                 xmlns:loc="using:PCL.Core.UI"
                 x:Class="PCL.Views.Pages.Launch.PageLaunchRight">
-    <ui:MyScrollViewer x:Name="PanBack"
-                       VerticalScrollBarVisibility="Auto"
-                       HorizontalScrollBarVisibility="Disabled">
-        <StackPanel x:Name="PanMain"
-                    Margin="25,25,25,10"
-                    Grid.IsSharedSizeScope="True">
-            <StackPanel x:Name="PanCustom" />
+    <ui:MyPageRight.Styles>
+        <Style Selector="Border.AiBubble">
+            <Setter Property="CornerRadius"
+                    Value="8" />
+            <Setter Property="Padding"
+                    Value="14,10" />
+            <Setter Property="MaxWidth"
+                    Value="620" />
+            <Setter Property="HorizontalAlignment"
+                    Value="Left" />
+        </Style>
+        <Style Selector="Border.AiBubbleUser">
+            <Setter Property="Background"
+                    Value="{DynamicResource ColorBrush3}" />
+            <Setter Property="HorizontalAlignment"
+                    Value="Right" />
+        </Style>
+        <Style Selector="Border.AiBubbleAssistant">
+            <Setter Property="Background"
+                    Value="{DynamicResource ColorBrushToolTip}" />
+        </Style>
+        <Style Selector="Border.AiBubbleError">
+            <Setter Property="Background"
+                    Value="{DynamicResource ColorBrushToolTip}" />
+            <Setter Property="BorderBrush"
+                    Value="{DynamicResource ColorBrushRedLight}" />
+            <Setter Property="BorderThickness"
+                    Value="1" />
+        </Style>
+        <Style Selector="TextBlock.AiBubbleText">
+            <Setter Property="TextWrapping"
+                    Value="Wrap" />
+            <Setter Property="FontSize"
+                    Value="13.5" />
+            <Setter Property="LineHeight"
+                    Value="20" />
+        </Style>
+        <Style Selector="TextBlock.AiBubbleTextUser">
+            <Setter Property="Foreground"
+                    Value="White" />
+        </Style>
+    </ui:MyPageRight.Styles>
 
-            <ui:MyCard x:Name="PanHint"
-                       Margin="0,0,0,15"
-                       Title="{loc:Loc Launch.Right.CommunityHint.Title}">
-                <ui:MyIconButton x:Name="BtnHintClose"
-                                 Width="20"
-                                 Height="20"
-                                 Margin="10"
-                                 HorizontalAlignment="Right"
-                                 VerticalAlignment="Top"
-                                 LogoScale="1.1"
-                                 SvgIcon="lucide/x" />
-                <StackPanel Margin="25,38,23,15">
-                    <TextBlock x:Name="LabHint1"
-                               Margin="0,0,0,2"
-                               FontSize="13.5"
-                               TextWrapping="Wrap" />
-                    <TextBlock x:Name="LabHint2"
-                               Margin="0,0,0,2"
-                               FontSize="13.5"
-                               TextWrapping="Wrap" />
+    <Grid x:Name="PanRoot"
+          RowDefinitions="*,Auto">
+        <Grid x:Name="PanChat"
+              Grid.Row="0"
+              Margin="22,8,22,0"
+              RowDefinitions="Auto,*,Auto">
+            <!-- 聊天标题栏 -->
+            <Grid Grid.Row="0"
+                  ColumnDefinitions="*,Auto"
+                  Margin="0,6,0,4">
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Spacing="8">
+                    <ui:MyIconButton Width="28"
+                                     Height="28"
+                                     SvgIcon="lucide/sparkles"
+                                     IsHitTestVisible="False" />
+                    <TextBlock FontSize="15"
+                               VerticalAlignment="Center"
+                               Text="{loc:Loc Launch.Ai.Title}" />
+                    <Border Padding="7,2"
+                            CornerRadius="4"
+                            Background="{DynamicResource ColorBrushToolTip}">
+                        <TextBlock x:Name="LabModel"
+                                   FontSize="11"
+                                   Opacity="0.7" />
+                    </Border>
                 </StackPanel>
-            </ui:MyCard>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="4"
+                            VerticalAlignment="Center">
+                    <ui:MyIconButton x:Name="BtnCancelReply"
+                                     Width="28"
+                                     Height="28"
+                                     SvgIcon="lucide/circle-minus"
+                                     IsVisible="False"
+                                     ToolTip.Tip="{loc:Loc Launch.Ai.Cancel}" />
+                    <ui:MyIconButton x:Name="BtnClearChat"
+                                     Width="28"
+                                     Height="28"
+                                     SvgIcon="lucide/trash-2"
+                                     ToolTip.Tip="{loc:Loc Launch.Ai.Clear}" />
+                    <ui:MyIconButton x:Name="BtnAiSettings"
+                                     Width="28"
+                                     Height="28"
+                                     SvgIcon="lucide/settings-2"
+                                     ToolTip.Tip="{loc:Loc Launch.Ai.Settings.Tip}" />
+                </StackPanel>
+            </Grid>
 
-            <ui:MyCard x:Name="PanLog"
-                       Margin="0,0,0,15"
-                       IsVisible="False"
-                       Title="{loc:Loc Launch.Right.Log.Title}">
-                <TextBlock x:Name="LabLog"
-                           Margin="20,38,20,18"
-                           TextWrapping="Wrap" />
-            </ui:MyCard>
-        </StackPanel>
-    </ui:MyScrollViewer>
+            <!-- 消息区 -->
+            <ui:MyScrollViewer x:Name="SclChat"
+                               Grid.Row="1"
+                               Margin="0,6,0,0"
+                               HorizontalScrollBarVisibility="Disabled"
+                               VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="PanMessages"
+                            Spacing="10"
+                            Margin="0,4,8,10" />
+            </ui:MyScrollViewer>
+
+            <!-- 输入区 / 启动进度 -->
+            <Panel Grid.Row="2"
+                   Margin="0,10,0,12">
+                <Grid x:Name="PanInput"
+                      ColumnDefinitions="*,Auto">
+                    <Border CornerRadius="8"
+                            Background="{DynamicResource ColorBrushToolTip}">
+                        <ui:MyTextBox x:Name="TxtInput"
+                                      MinHeight="46"
+                                      MaxHeight="140"
+                                      Margin="4"
+                                      AcceptsReturn="True"
+                                      TextWrapping="Wrap"
+                                      HasBackground="False"
+                                      HintText="{loc:Loc Launch.Ai.Input.Hint}" />
+                    </Border>
+                    <ui:MyIconButton x:Name="BtnSend"
+                                     Grid.Column="1"
+                                     Width="46"
+                                     Height="46"
+                                     Margin="8,0,0,0"
+                                     SvgIcon="lucide/send"
+                                     ToolTip.Tip="{loc:Loc Launch.Ai.Send}" />
+                </Grid>
+
+                <Grid x:Name="PanLaunching"
+                      IsVisible="False"
+                      ColumnDefinitions="*,Auto"
+                      RowDefinitions="Auto,Auto">
+                    <TextBlock x:Name="LabLaunchingStage"
+                               Grid.Row="0"
+                               VerticalAlignment="Center"
+                               FontSize="13"
+                               Opacity="0.8"
+                               TextTrimming="CharacterEllipsis" />
+                    <ui:MyButton x:Name="BtnCancelLaunch"
+                                 Grid.Row="0"
+                                 Grid.RowSpan="2"
+                                 Grid.Column="1"
+                                 Height="34"
+                                 Margin="10,0,0,0"
+                                 MinWidth="90"
+                                 VerticalAlignment="Center"
+                                 Text="{loc:Loc Launch.Ai.CancelLaunch}" />
+                    <ProgressBar x:Name="BarLaunch"
+                                 Grid.Row="1"
+                                 Height="4"
+                                 Margin="0,7,0,0"
+                                 Minimum="0"
+                                 Maximum="1"
+                                 VerticalAlignment="Center" />
+                </Grid>
+            </Panel>
+        </Grid>
+
+        <!-- 底部操作栏：左下设置 + 账号 / 版本 / 启动 -->
+        <Grid x:Name="PanBottom"
+              Grid.Row="1"
+              Height="72"
+              Margin="18,0,18,8"
+              ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+            <ui:MyIconButton x:Name="BtnSettings"
+                             Grid.Column="0"
+                             Width="42"
+                             Height="42"
+                             VerticalAlignment="Center"
+                             SvgIcon="lucide/settings"
+                             ToolTip.Tip="{loc:Loc Launch.Ai.Settings.Tip}" />
+            <TextBlock Grid.Column="1"
+                       Margin="10,0"
+                       VerticalAlignment="Center"
+                       FontSize="11"
+                       Opacity="0.55"
+                       TextTrimming="CharacterEllipsis"
+                       Text="{loc:Loc Launch.Ai.PoweredBy}" />
+            <ui:MyButton x:Name="BtnAccount"
+                         Grid.Column="2"
+                         Height="40"
+                         MinWidth="112"
+                         Margin="0,0,8,0"
+                         VerticalAlignment="Center"
+                         Text="{loc:Loc Launch.Ai.Account}" />
+            <ui:MyButton x:Name="BtnVersion"
+                         Grid.Column="3"
+                         Height="40"
+                         MinWidth="150"
+                         MaxWidth="230"
+                         Margin="0,0,8,0"
+                         VerticalAlignment="Center"
+                         Text="{loc:Loc Launch.Ai.Version}" />
+            <ui:MyButton x:Name="BtnLaunch"
+                         Grid.Column="4"
+                         Height="48"
+                         MinWidth="150"
+                         VerticalAlignment="Center"
+                         ColorType="Highlight"
+                         Text="{loc:Loc Launch.Ai.Launch}" />
+        </Grid>
+
+        <!-- 账号抽屉 -->
+        <Grid x:Name="PanDrawerLayer"
+              Grid.RowSpan="2"
+              ZIndex="3"
+              IsVisible="False">
+            <Border x:Name="BorDrawerMask"
+                    Background="#55000000"
+                    PointerPressed="DrawerMask_OnPointerPressed" />
+            <Border x:Name="BorDrawer"
+                    Width="330"
+                    HorizontalAlignment="Left"
+                    Background="{DynamicResource ColorBrushBackground}"
+                    CornerRadius="0,8,8,0"
+                    BoxShadow="4 0 10 0 #22000000">
+                <Grid RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0"
+                          Height="46"
+                          ColumnDefinitions="*,Auto"
+                          Margin="14,0,8,0">
+                        <TextBlock VerticalAlignment="Center"
+                                   FontSize="14"
+                                   Text="{loc:Loc Launch.Ai.Account.Title}" />
+                        <ui:MyIconButton x:Name="BtnCloseDrawer"
+                                         Grid.Column="1"
+                                         Width="28"
+                                         Height="28"
+                                         VerticalAlignment="Center"
+                                         SvgIcon="lucide/x" />
+                    </Grid>
+                    <ContentControl x:Name="PanDrawerHost"
+                                    Grid.Row="1" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
 </ui:MyPageRight>

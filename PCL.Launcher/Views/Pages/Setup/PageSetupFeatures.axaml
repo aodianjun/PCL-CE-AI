@@ -1,0 +1,145 @@
+<ui:MyPageRight xmlns="https://github.com/avaloniaui"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                xmlns:ui="using:PCL.UI.Controls"
+                xmlns:loc="using:PCL.Core.UI"
+                x:Class="PCL.Views.Pages.Setup.PageSetupFeatures">
+    <ui:MyScrollViewer x:Name="PanBack"
+                       HorizontalScrollBarVisibility="Disabled"
+                       VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="25,10">
+            <TextBlock Margin="2,10,2,0"
+                       FontSize="13"
+                       Opacity="0.7"
+                       TextWrapping="Wrap"
+                       Text="{loc:Loc Setup.Features.Intro}" />
+
+            <ui:MyCard Margin="0,15,0,15"
+                       Title="{loc:Loc Setup.Features.Download.Title}">
+                <StackPanel Margin="25,40,25,18">
+                    <TextBlock FontSize="13"
+                               Opacity="0.75"
+                               TextWrapping="Wrap"
+                               Text="{loc:Loc Setup.Features.Download.Desc}" />
+                    <WrapPanel Margin="0,12,0,0"
+                               Orientation="Horizontal">
+                        <ui:MyButton x:Name="BtnDownloadInstall"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Setup.Features.Download.Install}" />
+                        <ui:MyButton x:Name="BtnDownloadMod"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Download.Left.Mod}" />
+                        <ui:MyButton x:Name="BtnDownloadPack"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Download.Left.Modpack}" />
+                        <ui:MyButton x:Name="BtnDownloadResourcePack"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Download.Left.ResourcePack}" />
+                        <ui:MyButton x:Name="BtnDownloadShader"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Download.Left.Shader}" />
+                        <ui:MyButton x:Name="BtnDownloadWorld"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Download.Left.World}" />
+                        <ui:MyButton x:Name="BtnDownloadDataPack"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Download.Left.DataPack}" />
+                    </WrapPanel>
+                </StackPanel>
+            </ui:MyCard>
+
+            <ui:MyCard Margin="0,0,0,15"
+                       Title="{loc:Loc Setup.Features.Game.Title}">
+                <StackPanel Margin="25,40,25,18">
+                    <TextBlock FontSize="13"
+                               Opacity="0.75"
+                               TextWrapping="Wrap"
+                               Text="{loc:Loc Setup.Features.Game.Desc}" />
+                    <WrapPanel Margin="0,12,0,0"
+                               Orientation="Horizontal">
+                        <ui:MyButton x:Name="BtnSelectInstance"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Launch.Home.SelectInstance}" />
+                        <ui:MyButton x:Name="BtnInstanceSetup"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Setup.Features.Game.InstanceSettings}" />
+                        <ui:MyButton x:Name="BtnGameLog"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Setup.Features.Game.GameLog}" />
+                        <ui:MyButton x:Name="BtnTaskManager"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Setup.Features.Game.TaskManager}" />
+                    </WrapPanel>
+                </StackPanel>
+            </ui:MyCard>
+
+            <ui:MyCard Margin="0,0,0,15"
+                       Title="{loc:Loc Setup.Features.Tools.Title}">
+                <StackPanel Margin="25,40,25,18">
+                    <TextBlock FontSize="13"
+                               Opacity="0.75"
+                               TextWrapping="Wrap"
+                               Text="{loc:Loc Setup.Features.Tools.Desc}" />
+                    <WrapPanel Margin="0,12,0,0"
+                               Orientation="Horizontal">
+                        <ui:MyButton x:Name="BtnMultiplayer"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Tools.Left.Lobby}" />
+                        <ui:MyButton x:Name="BtnUtilities"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Tools.Left.Utilities.Title}" />
+                    </WrapPanel>
+                </StackPanel>
+            </ui:MyCard>
+
+            <ui:MyCard Margin="0,0,0,15"
+                       Title="{loc:Loc Setup.Features.Ai.Title}">
+                <StackPanel Margin="25,40,25,18">
+                    <TextBlock FontSize="13"
+                               Opacity="0.75"
+                               TextWrapping="Wrap"
+                               Text="{loc:Loc Setup.Features.Ai.Desc}" />
+                    <WrapPanel Margin="0,12,0,0"
+                               Orientation="Horizontal">
+                        <ui:MyButton x:Name="BtnAiSetup"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     ColorType="Highlight"
+                                     Text="{loc:Loc Setup.Features.Ai.Go}" />
+                        <ui:MyButton x:Name="BtnHome"
+                                     Height="34"
+                                     MinWidth="118"
+                                     Margin="0,0,8,8"
+                                     Text="{loc:Loc Setup.Features.Ai.Home}" />
+                    </WrapPanel>
+                </StackPanel>
+            </ui:MyCard>
+        </StackPanel>
+    </ui:MyScrollViewer>
+</ui:MyPageRight>

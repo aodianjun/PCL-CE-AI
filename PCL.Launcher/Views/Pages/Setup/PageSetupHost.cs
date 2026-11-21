@@ -27,7 +27,8 @@ public sealed class PageSetupHost : IPageHost
 
     public PageId Page => PageIds.Setup;
 
-    public MainTab? Tab => MainTab.Setup;
+    /// <summary>设置从启动页左下角进入，按二级页面处理，标题栏显示返回按钮。</summary>
+    public MainTab? Tab => null;
 
     public double LeftWidth => _descriptor.LeftWidth;
 

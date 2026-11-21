@@ -19,6 +19,7 @@ public interface IProfileUi
     bool HandleMicrosoftXstsError(IdentityModelAuthenticationException exception);
     bool HandleMicrosoftNotOwnedError(IdentityModelAuthenticationException exception);
     bool HandleMicrosoftCreateProfileError(IdentityModelAuthenticationException exception);
+    bool HandleMicrosoftAppNotApprovedError(IdentityModelAuthenticationException exception);
 }
 
 public static class LoginProfile
@@ -56,5 +57,10 @@ public static class LoginProfile
     public static bool HandleMicrosoftCreateProfileError(IdentityModelAuthenticationException ex)
     {
         return Current?.HandleMicrosoftCreateProfileError(ex) ?? false;
+    }
+
+    public static bool HandleMicrosoftAppNotApprovedError(IdentityModelAuthenticationException ex)
+    {
+        return Current?.HandleMicrosoftAppNotApprovedError(ex) ?? false;
     }
 }

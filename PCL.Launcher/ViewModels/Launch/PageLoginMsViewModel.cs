@@ -132,6 +132,15 @@ public partial class PageLoginMsViewModel : ViewModelBase
                             "Launch.Account.Microsoft.LoginFailed.WithDetail",
                             ex.Message.TrimStart('$'))));
             }
+            else if (ex.Message.Contains("client id is not configured", StringComparison.OrdinalIgnoreCase))
+            {
+                // 本地 Debug 构建不会带 CI 注入的客户端 ID，这里给出可执行的说明而不是笼统的登录失败。
+                LauncherCommon.Log(
+                    ex,
+                    Lang.Text("Launch.Account.Microsoft.Error.ClientIdMissing"),
+                    LauncherLogLevel.Msgbox,
+                    userSummary: Lang.Text("Launch.Account.Microsoft.Error.ClientIdMissing"));
+            }
             else if (ex is AuthenticationException && ex.Message.Contains("SSL/TLS"))
             {
                 LauncherCommon.Log(

@@ -27,15 +27,14 @@ public sealed class ToolsPageHost : IPageHost
 
     public PageId Page => PageIds.Tools;
 
-    public MainTab? Tab => MainTab.Tools;
+    /// <summary>工具页已收进设置页，按二级页面处理，标题栏显示返回按钮。</summary>
+    public MainTab? Tab => null;
 
     public double LeftWidth => _descriptor.LeftWidth;
 
     public string GetTitle(PageRoute stack)
     {
-        var sub = _descriptor.NormalizeSubPage(stack.SubPage);
-        var descriptor = _descriptor.FindSubPage(sub);
-        return descriptor is null ? string.Empty : Lang.Text(descriptor.TitleKey);
+        return Lang.Text("Main.Tab.Tools");
     }
 
     public Control? GetLeft(PageRoute stack)

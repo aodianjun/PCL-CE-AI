@@ -617,4 +617,34 @@ public static partial class Config
         [ConfigItem<string>("VersionServerAuthServer", "")] public partial ArgConfig<string> AuthServerAddress { get; }
         [ConfigItem<bool>("VersionServerLoginLock", false)] public partial ArgConfig<bool> AuthLocked { get; }
     }
+
+    /// <summary>
+    /// AI 助手配置（DeepSeek harness）。
+    /// </summary>
+    [ConfigGroup("Ai")] partial class AiConfigGroup
+    {
+        /// <summary>API 基址，兼容 OpenAI 协议的 /chat/completions。</summary>
+        [ConfigItem<string>("AiBaseUrl", "https://api.deepseek.com", ConfigSource.Local)] public partial string BaseUrl { get; set; }
+
+        /// <summary>API Key，本地加密保存。</summary>
+        [ConfigItem<string>("AiApiKey", "", ConfigSource.SharedEncrypt)] public partial string ApiKey { get; set; }
+
+        /// <summary>模型名称。</summary>
+        [ConfigItem<string>("AiModel", "deepseek-chat", ConfigSource.Local)] public partial string Model { get; set; }
+
+        /// <summary>是否允许 AI 调用本地工具（启动、改 Mod、跳转页面等）。</summary>
+        [ConfigItem<bool>("AiEnableTools", true, ConfigSource.Local)] public partial bool EnableTools { get; set; }
+
+        /// <summary>游戏崩溃时自动把报告交给 AI 分析。</summary>
+        [ConfigItem<bool>("AiAutoAnalyzeCrash", true, ConfigSource.Local)] public partial bool AutoAnalyzeCrash { get; set; }
+
+        /// <summary>是否已经完成首次接入引导。</summary>
+        [ConfigItem<bool>("AiOnboardingDone", false, ConfigSource.Local)] public partial bool OnboardingDone { get; set; }
+
+        /// <summary>保留的历史消息条数。</summary>
+        [ConfigItem<int>("AiHistoryLimit", 40, ConfigSource.Local)] public partial int HistoryLimit { get; set; }
+
+        /// <summary>系统提示词附加内容。</summary>
+        [ConfigItem<string>("AiSystemPromptExtra", "", ConfigSource.Local)] public partial string SystemPromptExtra { get; set; }
+    }
 }

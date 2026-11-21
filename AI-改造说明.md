@@ -1,0 +1,157 @@
+# PCL CE · 纯 AI 启动页改造说明
+
+本次改造把 PCL CE 的启动页重构成「AI 对话为主 + 最少操作按钮」，并把原启动器分散的功能收进设置页。
+所有改动都在本仓库内，未引入新的第三方包。
+
+## 一、界面变化
+
+### 1. 启动页（`PageLaunchRight`）
+
+- 左侧原来的实例/账号栏不再挂载，整页只有一个 AI 对话区。
+- 对话框支持流式输出、取消回复、清空对话，以及模型名/状态显示。
+- 底部操作栏只保留：
+  - 左下角 **设置**（齿轮）→ 打开设置页
+  - **账号** → 打开账号抽屉（复用原有登录/档案/皮肤界面）
+  - **选择版本** → 版本选择页
+  - **启动游戏**（没有实例时自动变成「下载游戏」，跳到安装页）
+- 启动过程中的阶段、进度、取消按钮直接显示在对话输入框的位置。
+- 首次运行（未配置 API Key 且未完成引导）会自动打开「设置 → AI 接入」。
+
+### 2. 标题栏
+
+- 去掉了「启动 / 下载 / 工具 / 设置」四个标签，只保留 Logo 与窗口按钮。
+- 下载、工具、设置都以二级页面打开，标题栏显示返回箭头与页面标题。
+
+### 3. 设置页（`PageIds.Setup`）
+
+新增两个子页，设置默认打开「功能入口」：
+
+- **功能入口**（`PageSetupFeatures`）
+  - 下载与安装：游戏安装、Mod、整合包、资源包、光影、世界、数据包
+  - 版本与运行：选择版本、实例设置、游戏日志、任务管理
+  - 工具与联机：联机大厅、实用工具
+  - AI 助手：跳转 AI 接入、回到启动页
+- **AI 接入**（`PageSetupAi`）
+  - 内置接入引导：DeepSeek 注册/创建 Key、填写、保存并测试的完整步骤
+  - API 地址 / 模型 / API Key 输入，允许 AI 操作启动器、崩溃自动分析开关
+  - 「保存并测试」「获取 API Key」「跳过引导」
+  - 隐私说明
+
+原「启动 / Java / 游戏管理 / 联机 / 界面 / 语言 / 杂项 / 关于 / 更新 / 反馈 / 日志」子页全部保留。
+
+## 二、DeepSeek harness（`PCL.Launcher/Ai/`）
+
+- `AiChat.cs`
+  - `AiChatService`：OpenAI 兼容 Chat Completions 客户端，`stream=true` SSE 解析、历史裁剪、取消、错误气泡。
+  - 支持工具调用循环（最多 8 轮），自动把工具结果回传给模型继续回答。
+  - `SubmitCrashReport()`：把崩溃报告作为隐藏系统消息提交，并在聊天里自动发起分析。
+  - `TestConnectionAsync()`：设置页「保存并测试」使用。
+  - 兼容只返回普通 JSON 的接口，以及 `https://api.deepseek.com` 或带 `/v1` 的基址。
+- `AiTools.cs`
+  - `get_launcher_status`、`list_instances`、`select_instance`
+  - `launch_game`
+  - `list_mods`、`set_mod_enabled`、`delete_mod`（操作当前实例 `mods` 目录）
+  - `open_page`（下载/工具/设置/实例设置/日志/任务管理等）
+  - `search_resource`（按版本与加载器打开资源下载页）
+  - `get_game_log`、`get_last_crash`
+  - `install_version_note`（打开安装页并预选版本号）
+- 配置项（`Config.Ai`）：
+  - `BaseUrl`、`ApiKey`（本地加密保存）、`Model`
+  - `EnableTools`、`AutoAnalyzeCrash`、`OnboardingDone`、`HistoryLimit`、`SystemPromptExtra`
+
+## 三、崩溃报错自动交给 AI
+
+`CrashPresenter.OutputAsync()` 在生成崩溃报告后，如果 `Config.Ai.AutoAnalyzeCrash` 为真：
+
+1. 调用 `AiChatService.SubmitCrashReport(报告全文)`；
+2. 自动切回启动页；
+3. 把报告作为隐藏上下文提交给模型，聊天里自动出现一条分析请求与回复。
+
+没有配置 API Key 时只保存报告，等接入后再分析。
+
+## 四、改动文件
+
+新增：
+
+- `PCL.Launcher/Ai/AiChat.cs`
+- `PCL.Launcher/Ai/AiTools.cs`
+- `PCL.Launcher/Views/Pages/Setup/PageSetupAi.axaml(.cs)`
+- `PCL.Launcher/Views/Pages/Setup/PageSetupFeatures.axaml(.cs)`
+
+修改：
+
+- `PCL.Core/App/Config.cs`（新增 `Ai` 配置组）
+- `PCL.Launcher/Views/Pages/Launch/PageLaunchRight.axaml(.cs)`（重写为 AI 对话页）
+- `PCL.Launcher/Views/Pages/Launch/PageLaunchHost.cs`（不再挂载左栏）
+- `PCL.Launcher/UI/Crash/CrashRunner.cs`（崩溃报告提交给 AI）
+- `PCL.Launcher/Navigation/Catalog/*PageModule.cs`（去掉下载/工具/设置标签，新增设置子页）
+- `PCL.Launcher/Navigation/SubPageIds.cs`
+- `PCL.Launcher/Views/Pages/{Download,Setup,Tools}/*Host.cs`（改为二级页面，带返回）
+- `PCL.Launcher/Views/Shell/TitleBar.axaml.cs`（只有一个主入口时隐藏标签栏）
+- `PCL.Localization/Languages/*.axaml`（新增 65 个本地化键，7 种语言）
+
+## 五、构建与验证
+
+仓库使用 `LangVersion 15.0` 与 `.NET 10` 目标框架，需要 **.NET 11 预览版 SDK** 才能编译（.NET 10 SDK 会报 `CS1617: /langversion 15.0 无效`）。
+
+```bash
+dotnet build PCL.Launcher/PCL.Launcher.csproj -c Debug
+dotnet test PCL.Core.Test/PCL.Core.Test.csproj --filter "FullyQualifiedName~Localization"
+```
+
+已在本机验证：
+
+- `PCL.Launcher` Debug 构建 0 错误；
+- 本地化测试 9/9 通过（键齐全、无重复、命名规范）；
+- 实机启动：启动页正常渲染，首次运行自动进入「设置 → AI 接入」，无 XAML/绑定异常。
+
+## 六、关于正版（微软）登录
+
+- 仓库本身不包含微软 OAuth 客户端 ID；官方发布版由 CI 通过 `PCL_MS_CLIENT_ID` 注入（见 `.github/workflows/reusable-build.yml`）。
+- 本地 Debug 构建没有该密钥时，微软登录会失败，日志中为 `Microsoft OAuth client id is not configured.`。现在点“开始正版验证”会直接提示缺少客户端 ID，并建议改用离线/第三方登录。
+- 想在本地临时使用正版登录：注册一个 Azure 应用（公共客户端、允许设备代码流、勾选 Xbox Live 相关权限），启动前设置环境变量 `PCL_MS_CLIENT_ID=<客户端 ID>`。Debug 构建会在运行时读取该环境变量。
+
+### 让所有设备直接可用正版登录
+
+Release 构建默认不读运行时环境变量，必须在**编译期**把客户端 ID 写进产物：
+
+1. 注册 Azure 应用（用你自己的 Microsoft 账号，免费）：
+   - 打开 portal.azure.com → Microsoft Entra ID → 应用注册 → 新注册；
+   - 支持的账户类型选「仅个人 Microsoft 账户」（或「任何组织目录中的账户和个人 Microsoft 账户」）；
+   - 「身份验证」→「允许公共客户端流」设为「是」（设备代码流必需）；
+   - 「API 权限」→ 添加权限 → 搜索 Xbox Live → 委托权限 → `XboxLive.signin`；再添加 Microsoft Graph 委托权限 `offline_access`（`openid`、`profile` 通常默认已有）；
+   - 复制「应用程序(客户端) ID」。
+2. 用仓库脚本构建：
+
+   ```powershell
+   ./scripts/build-with-ms-login.ps1 -ClientId "<你的客户端 ID>"
+   ```
+
+   等价的手动命令（注意 `-t:Rebuild` 与 `UseSharedCompilation=false`，避免复用的编译器进程读不到本次环境变量）：
+
+   ```powershell
+   $env:PCL_WRITE_SECRET = "1"
+   $env:PCL_MS_CLIENT_ID = "<你的客户端 ID>"
+   dotnet build PCL.Launcher/PCL.Launcher.csproj -c Release -p:UseSharedCompilation=false -t:Rebuild
+   ```
+3. **向 Mojang 提交应用审核**：在 <https://aka.ms/mce-reviewappid> 填写应用名称、客户端 ID 与用途说明。第三方应用调用 `api.minecraftservices.com` 前必须通过该审核，否则登录会在最后一步返回 `403 Invalid app registration`。审核通常需要数天到数周。
+4. 分发 `PCL.Launcher/bin/Release` 下的产物。目标设备无需任何环境变量，直接正版登录（前提是审核已通过）。
+
+说明：公共客户端的客户端 ID 会随二进制公开，这不是密钥；不要往应用里放 client secret。所有使用该构建的玩家都会共享你注册的这个 Azure 应用的配额。官方 PCL CE 的客户端 ID 属于其发布方，本项目不会去提取或借用。
+
+## 七、回滚
+
+所有改动都在工作区，没有数据库迁移、没有改存档。回滚步骤：
+
+```bash
+cd PCL-CE
+git checkout -- PCL.Core PCL.Launcher PCL.Localization
+git clean -fd PCL.Launcher/Ai PCL.Launcher/Views/Pages/Setup
+```
+
+如果只想关闭 AI：
+
+- 设置 → AI 接入 → 清空 API Key；
+- 或在 `config.v1.yml` 中删除 `Ai*` 键（`AiBaseUrl` / `AiApiKey` / `AiModel` / `AiEnableTools` / `AiAutoAnalyzeCrash` / `AiOnboardingDone`）。
+
+启动页与旧版差异仅在于界面组织，启动器原有功能（下载、实例、工具、设置）全部保留在设置页入口。

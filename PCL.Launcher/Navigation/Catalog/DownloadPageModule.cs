@@ -202,14 +202,6 @@ public sealed class DownloadPageModule : IPageModule
             (sp, descriptor) => ActivatorUtilities.CreateInstance<PageDownloadHost>(sp, descriptor))
     ];
 
-    public IReadOnlyList<MainTabDescriptor> MainTabs { get; } =
-    [
-        new(
-            MainTab.Download,
-            PageIds.Download,
-            "Main.Tab.Download",
-            "lucide/download",
-            1,
-            0.9d)
-    ];
+    /// <summary>下载入口已收进设置页，不再占据标题栏。</summary>
+    public IReadOnlyList<MainTabDescriptor> MainTabs { get; } = [];
 }

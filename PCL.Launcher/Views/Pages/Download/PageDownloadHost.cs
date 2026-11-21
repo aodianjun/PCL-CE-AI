@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using PCL.Core.App.Localization;
 using PCL.Navigation;
 using PCL.UI.Controls;
 
@@ -33,13 +34,14 @@ public sealed class PageDownloadHost : IPageHost
 
     public PageId Page => PageIds.Download;
 
-    public MainTab? Tab => MainTab.Download;
+    /// <summary>下载页已收进设置页，按二级页面处理，标题栏显示返回按钮。</summary>
+    public MainTab? Tab => null;
 
     public double LeftWidth => _descriptor.LeftWidth;
 
     public string GetTitle(PageRoute stack)
     {
-        return string.Empty;
+        return Lang.Text("Main.Tab.Download");
     }
 
     public Control? GetLeft(PageRoute stack)

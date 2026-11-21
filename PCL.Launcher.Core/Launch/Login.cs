@@ -140,7 +140,8 @@ public static partial class GameLaunch
         catch (IdentityModelAuthenticationException ex)
             when (LoginProfile.HandleMicrosoftXstsError(ex)
                   || LoginProfile.HandleMicrosoftNotOwnedError(ex)
-                  || LoginProfile.HandleMicrosoftCreateProfileError(ex))
+                  || LoginProfile.HandleMicrosoftCreateProfileError(ex)
+                  || LoginProfile.HandleMicrosoftAppNotApprovedError(ex))
         {
             throw new IdentityModelException("$$", ex);
         }

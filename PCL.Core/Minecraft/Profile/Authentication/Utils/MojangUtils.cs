@@ -40,7 +40,20 @@ public static class MojangUtils
                 }
                 ), Encoding.UTF8, "application/json")
             ).SendAsync(cancellationToken: token).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+            if (body.Length > 800) body = body[..800];
+            var normalized = body.ToLowerInvariant();
+            var appNotApproved = response.StatusCode == HttpStatusCode.Forbidden
+                                 && (normalized.Contains("app registration")
+                                     || normalized.Contains("appreginfo")
+                                     || normalized.Contains("not approved"));
+            throw new IdentityModelAuthenticationException(
+                appNotApproved ? "minecraft_app_not_approved" : "minecraft_authentication_failed",
+                $"Minecraft 登录接口返回 {(int)response.StatusCode}：{body}");
+        }
+
         return await response.AsJsonAsync<MojangResponse>(cancellationToken: token).ConfigureAwait(false);
     }
 
