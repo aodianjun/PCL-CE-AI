@@ -3803,4 +3803,5 @@
     <sys:String x:Key="Setup.Ai.AllowedDirectories">允許存取的資料夾</sys:String>
     <sys:String x:Key="Setup.Ai.AllowedDirectories.Hint">多個路徑用 ; 分隔</sys:String>
     <sys:String x:Key="Setup.Ai.AddFolder">新增</sys:String>
+    <sys:String x:Key="Launch.Ai.Attachment.PastedImage">貼上的圖片</sys:String>
 </ResourceDictionary>

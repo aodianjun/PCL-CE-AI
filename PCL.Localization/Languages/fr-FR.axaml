@@ -549,4 +549,5 @@
     <sys:String x:Key="Setup.Ai.AllowedDirectories">Allowed folders</sys:String>
     <sys:String x:Key="Setup.Ai.AllowedDirectories.Hint">Separate multiple paths with ;</sys:String>
     <sys:String x:Key="Setup.Ai.AddFolder">Add</sys:String>
+    <sys:String x:Key="Launch.Ai.Attachment.PastedImage">Pasted image</sys:String>
 </ResourceDictionary>

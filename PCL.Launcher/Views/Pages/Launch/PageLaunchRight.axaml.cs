@@ -2,9 +2,11 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using PCL.Ai;
 using PCL.Core.App;
@@ -120,6 +122,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         this.FindControl<MyIconButton>("BtnNewChatInList")!.Click += NewChat_OnClick;
         this.FindControl<MyIconButton>("BtnCloseConv")!.Click += CloseConv_OnClick;
         this.FindControl<MyIconButton>("BtnAttachFiles")!.Click += AttachFiles_OnClick;
+        _txtInput.PastingFromClipboard += OnPastingFromClipboard;
         this.FindControl<MyIconButton>("BtnSettings")!.Click += Settings_OnClick;
         this.FindControl<MyButton>("BtnCancelLaunch")!.Click += CancelLaunch_OnClick;
         this.FindControl<MyIconButton>("BtnCloseDrawer")!.Click += CloseDrawer_OnClick;
@@ -448,7 +451,6 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         if (files.Length == 0)
             return;
 
-        var imageExtensions = new[] { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" };
         foreach (var file in files)
         {
             if (_pendingAttachments.Count >= maxAttachments)
@@ -457,61 +459,162 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
                 break;
             }
 
-            try
-            {
-                var info = new FileInfo(file);
-                var extension = Path.GetExtension(file).ToLowerInvariant();
-                if (imageExtensions.Contains(extension))
-                {
-                    if (info.Length > 8 * 1024 * 1024)
-                    {
-                        HintService.Show(Hints.Warning(
-                            Lang.Text("Launch.Ai.Attachment.TooLarge", info.Name)));
-                        continue;
-                    }
-
-                    var mime = extension switch
-                    {
-                        ".png" => "image/png",
-                        ".gif" => "image/gif",
-                        ".webp" => "image/webp",
-                        ".bmp" => "image/bmp",
-                        _ => "image/jpeg"
-                    };
-                    var data = Convert.ToBase64String(File.ReadAllBytes(file));
-                    _pendingAttachments.Add(new AiAttachment
-                    {
-                        Name = info.Name,
-                        IsImage = true,
-                        DataUrl = $"data:{mime};base64,{data}"
-                    });
-                    continue;
-                }
-
-                if (info.Length > 1024 * 1024)
-                {
-                    HintService.Show(Hints.Warning(
-                        Lang.Text("Launch.Ai.Attachment.TooLarge", info.Name)));
-                    continue;
-                }
-
-                var text = File.ReadAllText(file);
-                if (text.Length > 200000)
-                    text = text[..200000] + Environment.NewLine + "…（已截断）";
-                _pendingAttachments.Add(new AiAttachment
-                {
-                    Name = info.Name,
-                    TextContent = text
-                });
-            }
-            catch (Exception ex)
-            {
-                HintService.Show(Hints.Warning(
-                    Lang.Text("Launch.Ai.Attachment.Failed", ex.Message)));
-            }
+            AddAttachmentFromPath(file);
         }
 
         RebuildPendingAttachments();
+    }
+
+    private void OnPastingFromClipboard(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox textBox)
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+            return;
+
+        _ = PasteFromClipboardAsync(textBox, clipboard, e);
+    }
+
+    private async Task PasteFromClipboardAsync(
+        TextBox textBox,
+        IClipboard clipboard,
+        RoutedEventArgs e)
+    {
+        try
+        {
+            var files = await clipboard.TryGetFilesAsync();
+            var paths = files?.Select(item => item?.Path is { IsAbsoluteUri: true, Scheme: "file" } uri
+                    ? uri.LocalPath
+                    : null)
+                .OfType<string>()
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .ToArray() ?? [];
+            if (paths.Length > 0)
+            {
+                e.Handled = true;
+                foreach (var path in paths)
+                {
+                    if (_pendingAttachments.Count >= 6)
+                    {
+                        HintService.Show(Hints.Warning(Lang.Text("Launch.Ai.Attachment.Limit")));
+                        break;
+                    }
+
+                    AddAttachmentFromPath(path);
+                }
+
+                RebuildPendingAttachments();
+                return;
+            }
+
+            var bitmap = await clipboard.TryGetBitmapAsync();
+            if (bitmap is not null)
+            {
+                e.Handled = true;
+                AddBitmapAttachment(bitmap);
+                return;
+            }
+
+            // 没有文件或图片时保持默认文本粘贴行为。
+        }
+        catch (Exception ex)
+        {
+            LogWrapper.Debug(ex, "UI", "读取剪贴板附件失败");
+        }
+    }
+
+    private void AddBitmapAttachment(Bitmap bitmap)
+    {
+        if (_pendingAttachments.Count >= 6)
+        {
+            HintService.Show(Hints.Warning(Lang.Text("Launch.Ai.Attachment.Limit")));
+            return;
+        }
+
+        try
+        {
+            using var stream = new MemoryStream();
+            bitmap.Save(stream);
+            _pendingAttachments.Add(new AiAttachment
+            {
+                Name = Lang.Text("Launch.Ai.Attachment.PastedImage")
+                       + " " + DateTime.Now.ToString("HHmmss") + ".png",
+                IsImage = true,
+                DataUrl = "data:image/png;base64," + Convert.ToBase64String(stream.ToArray())
+            });
+            RebuildPendingAttachments();
+        }
+        catch (Exception ex)
+        {
+            HintService.Show(Hints.Warning(Lang.Text("Launch.Ai.Attachment.Failed", ex.Message)));
+        }
+    }
+
+    private bool AddAttachmentFromPath(string file)
+    {
+        try
+        {
+            if (Directory.Exists(file))
+                return false;
+
+            var info = new FileInfo(file);
+            if (!info.Exists)
+                return false;
+
+            var extension = Path.GetExtension(file).ToLowerInvariant();
+            var imageExtensions = new[] { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" };
+            if (imageExtensions.Contains(extension))
+            {
+                if (info.Length > 8 * 1024 * 1024)
+                {
+                    HintService.Show(Hints.Warning(
+                        Lang.Text("Launch.Ai.Attachment.TooLarge", info.Name)));
+                    return false;
+                }
+
+                var mime = extension switch
+                {
+                    ".png" => "image/png",
+                    ".gif" => "image/gif",
+                    ".webp" => "image/webp",
+                    ".bmp" => "image/bmp",
+                    _ => "image/jpeg"
+                };
+                var data = Convert.ToBase64String(File.ReadAllBytes(file));
+                _pendingAttachments.Add(new AiAttachment
+                {
+                    Name = info.Name,
+                    IsImage = true,
+                    DataUrl = $"data:{mime};base64,{data}"
+                });
+                return true;
+            }
+
+            if (info.Length > 1024 * 1024)
+            {
+                HintService.Show(Hints.Warning(
+                    Lang.Text("Launch.Ai.Attachment.TooLarge", info.Name)));
+                return false;
+            }
+
+            var text = File.ReadAllText(file);
+            if (text.Length > 200000)
+                text = text[..200000] + Environment.NewLine + "…（已截断）";
+            _pendingAttachments.Add(new AiAttachment
+            {
+                Name = info.Name,
+                TextContent = text
+            });
+            return true;
+        }
+        catch (Exception ex)
+        {
+            HintService.Show(Hints.Warning(
+                Lang.Text("Launch.Ai.Attachment.Failed", ex.Message)));
+            return false;
+        }
     }
 
     private void RebuildPendingAttachments()

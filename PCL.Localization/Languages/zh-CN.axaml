@@ -3812,4 +3812,5 @@
     <sys:String x:Key="Setup.Ai.AllowedDirectories">允许访问的文件夹</sys:String>
     <sys:String x:Key="Setup.Ai.AllowedDirectories.Hint">多个路径用 ; 分隔</sys:String>
     <sys:String x:Key="Setup.Ai.AddFolder">添加</sys:String>
+    <sys:String x:Key="Launch.Ai.Attachment.PastedImage">粘贴的图片</sys:String>
 </ResourceDictionary>
