@@ -13,7 +13,9 @@ PCL CE-AI lets the AI assistant drive the launcher: ask it to "launch the game",
 - **Context usage**: the chat header shows estimated tokens / limit / percentage; click for details.
 - **Model list and auto parameters**: fetch `/models` in AI setup; selecting a model fills the context limit and max output automatically.
 - **Background execution**: tool calls, log reads and streaming run on background threads; each tool times out after 60s, and the model after 60s without a response or 90s of stream silence.
-- **Visible process**: a rotating grass block appears while busy; reasoning content and every tool call (name, arguments, result) are shown as bubbles.
+- **Visible process**: three rotating grass blocks appear while busy; reasoning content and every tool call (name, arguments, result) are shown as bubbles.
+- **Auto-collapse**: reasoning and tool execution collapse into a one-line header when finished; click to expand.
+- **No forced navigation**: the AI only reports where a page is by default; it switches pages only when you explicitly ask to open one.
 - **Only four controls at the bottom**: Settings (bottom-left), Account, Version, Launch.
 - **AI can**:
   - launch the game and switch versions

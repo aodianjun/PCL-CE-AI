@@ -111,7 +111,8 @@ public static class AiTools
                 "在启动器中打开指定页面。可选值：launch、download、mod、modpack、resourcepack、shader、world、datapack、favorites、tools、settings、instance_settings、instance_select、logs、tasks。",
                 new JsonObject
                 {
-                    ["page"] = Str("页面标识")
+                    ["page"] = Str("页面标识"),
+                    ["navigate"] = Bool("是否真的切换页面。只有用户明确要求打开页面时才设为 true；默认 false，只返回页面位置，避免打断用户当前操作")
                 },
                 Required("page")),
             Tool(
@@ -121,7 +122,8 @@ public static class AiTools
                 {
                     ["type"] = Str("资源类型：mod、modpack、resourcepack、shader、world、datapack"),
                     ["game_version"] = Str("可选，目标 Minecraft 版本，例如 1.21.1"),
-                    ["loader"] = Str("可选，加载器：forge、neoforge、fabric、quilt、liteloader、cleanroom")
+                    ["loader"] = Str("可选，加载器：forge、neoforge、fabric、quilt、liteloader、cleanroom"),
+                    ["navigate"] = Bool("是否真的切换页面。只有用户明确要求打开时才设为 true；默认 false")
                 },
                 Required("type")),
             Tool(
@@ -144,7 +146,8 @@ public static class AiTools
                 "当用户要下载安装新版本时，返回当前启动器安装流程说明并打开安装页。",
                 new JsonObject
                 {
-                    ["version"] = Str("可选，目标版本号")
+                    ["version"] = Str("可选，目标版本号"),
+                    ["navigate"] = Bool("是否真的切换页面。只有用户明确要求打开安装页时才设为 true；默认 false")
                 })
         );
     }
@@ -171,14 +174,19 @@ public static class AiTools
                     GetString(args, "file"),
                     GetBool(args, "enabled")),
                 "delete_mod" => DeleteMod(GetString(args, "file")),
-                "open_page" => OpenPage(GetString(args, "page")),
+                "open_page" => OpenPage(
+                    GetString(args, "page"),
+                    GetBool(args, "navigate")),
                 "search_resource" => SearchResource(
                     GetString(args, "type"),
                     GetString(args, "game_version"),
-                    GetString(args, "loader")),
+                    GetString(args, "loader"),
+                    GetBool(args, "navigate")),
                 "get_game_log" => GetGameLog(GetInt(args, "lines", DefaultLogLines)),
                 "get_last_crash" => GetLastCrash(),
-                "install_version_note" => OpenInstallPage(GetString(args, "version")),
+                "install_version_note" => OpenInstallPage(
+                    GetString(args, "version"),
+                    GetBool(args, "navigate")),
                 _ => $"未知工具：{call.Name}"
             };
         }
@@ -342,11 +350,7 @@ public static class AiTools
         if (File.Exists(instance.PathInstance + ".pclignore"))
             return "这个版本正在安装中，暂时不能启动。";
 
-        await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            PageRouter.Navigate(PageIds.Launch);
-            GameLaunch.McLaunchStart();
-        });
+        await Dispatcher.UIThread.InvokeAsync(() => GameLaunch.McLaunchStart());
 
         return $"已开始启动 Minecraft {instance.Name}。";
     }
@@ -498,70 +502,100 @@ public static class AiTools
         }
     }
 
-    private static string OpenPage(string? page)
+    private static string OpenPage(string? page, bool navigate)
     {
         var key = (page ?? "").Trim().ToLowerInvariant();
+        string description;
+        Action? action;
         switch (key)
         {
             case "launch":
-                PageRouter.Navigate(PageIds.Launch);
-                return "已回到启动页。";
+                description = "启动页";
+                action = () => PageRouter.Navigate(PageIds.Launch);
+                break;
             case "download":
             case "install":
-                PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadInstall);
-                return "已打开 Minecraft 安装页。";
+                description = "Minecraft 安装页";
+                action = () => PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadInstall);
+                break;
             case "mod":
-                PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadMod);
-                return "已打开 Mod 下载页。";
+                description = "Mod 下载页";
+                action = () => PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadMod);
+                break;
             case "modpack":
-                PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadPack);
-                return "已打开整合包下载页。";
+                description = "整合包下载页";
+                action = () => PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadPack);
+                break;
             case "resourcepack":
-                PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadResourcePack);
-                return "已打开资源包下载页。";
+                description = "资源包下载页";
+                action = () => PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadResourcePack);
+                break;
             case "shader":
-                PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadShader);
-                return "已打开光影下载页。";
+                description = "光影下载页";
+                action = () => PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadShader);
+                break;
             case "world":
-                PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadWorld);
-                return "已打开世界下载页。";
+                description = "世界下载页";
+                action = () => PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadWorld);
+                break;
             case "datapack":
-                PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadDataPack);
-                return "已打开数据包下载页。";
+                description = "数据包下载页";
+                action = () => PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadDataPack);
+                break;
             case "favorites":
-                PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadCompFavorites);
-                return "已打开收藏页。";
+                description = "收藏页";
+                action = () => PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadCompFavorites);
+                break;
             case "tools":
-                PageRouter.Navigate(PageIds.Tools);
-                return "已打开工具页。";
+                description = "工具页";
+                action = () => PageRouter.Navigate(PageIds.Tools);
+                break;
             case "settings":
             case "setup":
-                PageRouter.Navigate(PageIds.Setup);
-                return "已打开设置页。";
+                description = "设置页";
+                action = () => PageRouter.Navigate(PageIds.Setup);
+                break;
             case "instance_settings":
             {
                 var instance = InstanceList.McMcInstanceSelected;
                 if (instance is null)
                     return "当前没有选择版本，无法打开实例设置。";
-                PageRouter.Navigate(PageIds.InstanceSetup, null, instance);
-                return $"已打开版本“{instance.Name}”的设置页。";
+                description = $"版本“{instance.Name}”的设置页";
+                action = () => PageRouter.Navigate(PageIds.InstanceSetup, null, instance);
+                break;
             }
             case "instance_select":
-                PageRouter.Navigate(PageIds.InstanceSelect);
-                return "已打开版本选择页。";
+                description = "版本选择页";
+                action = () => PageRouter.Navigate(PageIds.InstanceSelect);
+                break;
             case "logs":
             case "game_log":
-                PageRouter.Navigate(PageIds.GameLog);
-                return "已打开游戏日志页。";
+                description = "游戏日志页";
+                action = () => PageRouter.Navigate(PageIds.GameLog);
+                break;
             case "tasks":
-                PageRouter.Navigate(PageIds.TaskManager);
-                return "已打开任务管理页。";
+                description = "任务管理页";
+                action = () => PageRouter.Navigate(PageIds.TaskManager);
+                break;
             default:
                 return $"未知页面“{page}”。可用值：launch、download、mod、modpack、resourcepack、shader、world、datapack、favorites、tools、settings、instance_settings、instance_select、logs、tasks。";
         }
+
+        if (action is null)
+            return $"未知页面“{page}”。";
+
+        if (!navigate)
+            return $"页面位置：{description}。为避免打断你当前的操作，没有自动切换页面；需要时从“设置 → 功能入口”进入，或明确告诉我“打开{description}”。";
+
+        action();
+        return $"已打开{description}。";
     }
 
-    private static string SearchResource(string? type, string? gameVersion, string? loader)
+    private static string SearchResource(
+        string? type,
+        string? gameVersion,
+        string? loader,
+        bool navigate)
     {
         var key = (type ?? "mod").Trim().ToLowerInvariant();
         var subPage = key switch
@@ -576,11 +610,16 @@ public static class AiTools
         };
 
         var loaderType = ResolveLoader(loader);
+        var description =
+            $"资源下载页（类型：{key}，游戏版本：{gameVersion ?? "自动"}，加载器：{loaderType}）";
+        if (!navigate)
+            return $"页面位置：{description}。为避免打断当前页面，没有自动切换。";
+
         var context = new CompSearchContext(
             string.IsNullOrWhiteSpace(gameVersion) ? null : gameVersion.Trim(),
             loaderType);
         PageRouter.Navigate(PageIds.Download, subPage, context);
-        return $"已打开资源下载页（类型：{key}，游戏版本：{gameVersion ?? "自动"}，加载器：{loaderType}）。";
+        return $"已打开{description}。";
     }
 
     private static Comp.CompLoaderType ResolveLoader(string? loader)
@@ -673,15 +712,20 @@ public static class AiTools
         yield return Path.Combine(ResolveMinecraftFolder(), "crash-reports");
     }
 
-    private static string OpenInstallPage(string? version)
+    private static string OpenInstallPage(string? version, bool navigate)
     {
         if (string.IsNullOrWhiteSpace(version))
         {
+            if (!navigate)
+                return "页面位置：Minecraft 安装页。为避免打断当前页面，没有自动切换。";
             PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadInstall);
             return "已打开 Minecraft 安装页。安装时需要选择版本、加载器和安装位置，页面里可以直接完成。";
         }
 
         var name = version.Trim();
+        if (!navigate)
+            return $"页面位置：Minecraft 安装页（可预选版本“{name}”）。为避免打断当前页面，没有自动切换。";
+
         // 安装页支持以字符串参数预选版本。
         PageRouter.Navigate(PageIds.Download, SubPageIds.DownloadInstall, name);
         return $"已打开 Minecraft 安装页并尝试选中版本“{name}”。确认加载器和安装位置后点击开始安装即可；装完告诉我，我可以帮你切换过去。";

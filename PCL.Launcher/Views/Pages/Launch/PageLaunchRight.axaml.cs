@@ -25,8 +25,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
 {
     private static bool _onboardingShownThisRun;
 
-    private readonly Dictionary<AiChatMessage, TextBlock> _bubbles = [];
-    private readonly Dictionary<AiChatMessage, Border> _bubbleBorders = [];
+    private readonly Dictionary<AiChatMessage, BubbleView> _bubbles = [];
     private readonly List<string> _launchLogBuffer = [];
 
     private readonly Panel _panInput;
@@ -41,10 +40,10 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
     private readonly MyIconButton _btnCancelReply;
     private readonly TextBlock _labModel;
     private readonly TextBlock _labContextUsage;
-    private readonly Image _imgThinking;
+    private readonly StackPanel _panThinking;
     private readonly DispatcherTimer _thinkingTimer;
-    private readonly RotateTransform _thinkingRotate = new();
-    private double _thinkingAngle;
+    private readonly RotateTransform[] _thinkingRotates = [new(), new(), new()];
+    private readonly double[] _thinkingAngles = [0d, 0d, 0d];
     private readonly TextBlock _labLaunchingStage;
     private readonly ProgressBar _barLaunch;
     private readonly Grid _panDrawerLayer;
@@ -74,16 +73,22 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         _btnCancelReply = this.FindControl<MyIconButton>("BtnCancelReply")!;
         _labModel = this.FindControl<TextBlock>("LabModel")!;
         _labContextUsage = this.FindControl<TextBlock>("LabContextUsage")!;
-        _imgThinking = this.FindControl<Image>("ImgThinking")!;
-        _imgThinking.RenderTransform = _thinkingRotate;
+        _panThinking = this.FindControl<StackPanel>("PanThinking")!;
+        var thinkingImages = _panThinking.Children.OfType<Image>().ToArray();
+        for (var i = 0; i < thinkingImages.Length && i < _thinkingRotates.Length; i++)
+            thinkingImages[i].RenderTransform = _thinkingRotates[i];
+
         _thinkingTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(40)
         };
         _thinkingTimer.Tick += (_, _) =>
         {
-            _thinkingAngle = (_thinkingAngle + 12) % 360;
-            _thinkingRotate.Angle = _thinkingAngle;
+            for (var i = 0; i < _thinkingRotates.Length; i++)
+            {
+                _thinkingAngles[i] = (_thinkingAngles[i] + 9 + i * 3) % 360;
+                _thinkingRotates[i].Angle = _thinkingAngles[i];
+            }
         };
         _labLaunchingStage = this.FindControl<TextBlock>("LabLaunchingStage")!;
         _barLaunch = this.FindControl<ProgressBar>("BarLaunch")!;
@@ -507,7 +512,6 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         Dispatcher.UIThread.Post(() =>
         {
             _bubbles.Clear();
-            _bubbleBorders.Clear();
             _panMessages.Children.Clear();
             if (AiChatService.Instance.Messages.Count == 0)
                 ShowWelcome();
@@ -590,11 +594,27 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
     {
         Dispatcher.UIThread.Post(() =>
         {
-            if (_bubbles.TryGetValue(message, out var text))
+            if (!_bubbles.TryGetValue(message, out var bubble))
+                return;
+
+            if (message.Role == AiRole.Tool)
             {
-                text.Text = ComposeMessageText(message);
-                ScrollToEnd();
+                bubble.Content.Text = ComposeToolBody(message);
             }
+            else if (message.Role == AiRole.Assistant)
+            {
+                bubble.Content.Text = string.IsNullOrWhiteSpace(message.Content)
+                    ? Lang.Text("Launch.Ai.Thinking")
+                    : message.Content;
+                if (!string.IsNullOrWhiteSpace(message.Reasoning))
+                    EnsureReasoningBlock(bubble, message);
+            }
+            else
+            {
+                bubble.Content.Text = message.Content;
+            }
+
+            ScrollToEnd();
         });
     }
 
@@ -603,7 +623,6 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         Dispatcher.UIThread.Post(() =>
         {
             _bubbles.Clear();
-            _bubbleBorders.Clear();
             _panMessages.Children.Clear();
             if (AiChatService.Instance.Messages.Count == 0)
             {
@@ -620,7 +639,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         Dispatcher.UIThread.Post(() =>
         {
             UpdateSendState();
-            _imgThinking.IsVisible = busy;
+            _panThinking.IsVisible = busy;
             if (busy)
             {
                 _thinkingTimer.Start();
@@ -628,8 +647,11 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             else
             {
                 _thinkingTimer.Stop();
-                _thinkingAngle = 0d;
-                _thinkingRotate.Angle = 0d;
+                for (var i = 0; i < _thinkingRotates.Length; i++)
+                {
+                    _thinkingAngles[i] = 0d;
+                    _thinkingRotates[i].Angle = 0d;
+                }
             }
         });
     }
@@ -678,68 +700,146 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         if (_bubbles.ContainsKey(message))
             return;
 
-        var text = new TextBlock
+        var panel = new StackPanel
         {
-            Text = ComposeMessageText(message),
+            Spacing = 4
+        };
+        var content = new TextBlock
+        {
             Classes = { "AiBubbleText" },
             MaxWidth = 620
         };
-
         var border = new Border
         {
             Classes = { "AiBubble" },
-            Child = text
+            Child = panel
+        };
+        var bubble = new BubbleView
+        {
+            Border = border,
+            Panel = panel,
+            Content = content
         };
 
         if (message.Role == AiRole.User)
         {
+            content.Text = message.Content;
+            content.Classes.Add("AiBubbleTextUser");
             border.Classes.Add("AiBubbleUser");
-            text.Classes.Add("AiBubbleTextUser");
+            panel.Children.Add(content);
         }
         else if (message.Role == AiRole.Tool)
         {
+            var label = Lang.Text("Launch.Ai.ToolExecution", message.ToolName ?? "tool");
+            var header = new TextBlock
+            {
+                Text = "▸ " + label,
+                FontSize = 11.5,
+                Opacity = 0.85
+            };
+            var body = new TextBlock
+            {
+                Text = ComposeToolBody(message),
+                Classes = { "AiBubbleText", "AiBubbleToolText" },
+                MaxWidth = 620,
+                IsVisible = false
+            };
+            header.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+                    return;
+                body.IsVisible = !body.IsVisible;
+                header.Text = (body.IsVisible ? "▾ " : "▸ ") + label;
+                e.Handled = true;
+            };
+            panel.Children.Add(header);
+            panel.Children.Add(body);
             border.Classes.Add("AiBubbleTool");
-            text.Classes.Add("AiBubbleToolText");
+            bubble.Content = body;
         }
         else
         {
             border.Classes.Add(message.IsError ? "AiBubbleError" : "AiBubbleAssistant");
+            content.Text = string.IsNullOrWhiteSpace(message.Content)
+                ? Lang.Text("Launch.Ai.Thinking")
+                : message.Content;
+            panel.Children.Add(content);
         }
 
-        _bubbles[message] = text;
-        _bubbleBorders[message] = border;
+        _bubbles[message] = bubble;
         _panMessages.Children.Add(border);
+
+        if (message.Role == AiRole.Assistant && !string.IsNullOrWhiteSpace(message.Reasoning))
+            EnsureReasoningBlock(bubble, message);
+
         if (scroll)
             ScrollToEnd();
     }
 
-    private static string ComposeMessageText(AiChatMessage message)
+    private void EnsureReasoningBlock(BubbleView bubble, AiChatMessage message)
+    {
+        if (bubble.ReasoningBody is null)
+        {
+            var header = new TextBlock
+            {
+                FontSize = 11,
+                Opacity = 0.65
+            };
+            var body = new TextBlock
+            {
+                FontSize = 12,
+                Opacity = 0.65,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 600
+            };
+            header.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+                    return;
+                ToggleReasoning(bubble);
+                e.Handled = true;
+            };
+
+            bubble.Panel.Children.Insert(0, body);
+            bubble.Panel.Children.Insert(0, header);
+            bubble.ReasoningHeader = header;
+            bubble.ReasoningBody = body;
+        }
+
+        bubble.ReasoningBody.Text = message.Reasoning;
+        if (!bubble.ReasoningManuallyToggled)
+        {
+            var expanded = string.IsNullOrWhiteSpace(message.Content);
+            bubble.ReasoningBody.IsVisible = expanded;
+            if (bubble.ReasoningHeader is not null)
+                bubble.ReasoningHeader.Text =
+                    (expanded ? "▾ " : "▸ ") + Lang.Text("Launch.Ai.Reasoning");
+        }
+    }
+
+    private void ToggleReasoning(BubbleView bubble)
+    {
+        if (bubble.ReasoningBody is null)
+            return;
+
+        var expanded = !bubble.ReasoningBody.IsVisible;
+        bubble.ReasoningBody.IsVisible = expanded;
+        bubble.ReasoningManuallyToggled = true;
+        if (bubble.ReasoningHeader is not null)
+            bubble.ReasoningHeader.Text =
+                (expanded ? "▾ " : "▸ ") + Lang.Text("Launch.Ai.Reasoning");
+    }
+
+    private static string ComposeToolBody(AiChatMessage message)
     {
         var nl = Environment.NewLine;
-        if (message.Role == AiRole.Tool)
-        {
-            var args = string.IsNullOrWhiteSpace(message.ToolArguments)
-                ? ""
-                : nl + message.ToolArguments;
-            var result = message.Content ?? "";
-            if (result.Length > 8000)
-                result = result[..8000] + nl + "…（已截断）";
-            return Lang.Text("Launch.Ai.ToolExecution", message.ToolName ?? "tool")
-                   + args + nl + "→" + nl + result;
-        }
+        var result = message.Content ?? "";
+        if (result.Length > 8000)
+            result = result[..8000] + nl + "…（已截断）";
 
-        var content = message.Content ?? "";
-        if (message.Role == AiRole.Assistant && !string.IsNullOrWhiteSpace(message.Reasoning))
-        {
-            var reasoning = Lang.Text("Launch.Ai.Reasoning") + nl + message.Reasoning.Trim();
-            return string.IsNullOrWhiteSpace(content)
-                ? reasoning
-                : reasoning + nl + nl + content;
-        }
-
-        if (message.Role == AiRole.Assistant && string.IsNullOrWhiteSpace(content))
-            return Lang.Text("Launch.Ai.Thinking");
-        return content;
+        return string.IsNullOrWhiteSpace(message.ToolArguments)
+            ? result
+            : message.ToolArguments + nl + "→" + nl + result;
     }
 
     private void AddLocalBubble(string text, bool error)
@@ -834,4 +934,19 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
     }
 
     #endregion
+
+    private sealed class BubbleView
+    {
+        public required Border Border { get; init; }
+
+        public required StackPanel Panel { get; init; }
+
+        public required TextBlock Content { get; set; }
+
+        public TextBlock? ReasoningHeader { get; set; }
+
+        public TextBlock? ReasoningBody { get; set; }
+
+        public bool ReasoningManuallyToggled { get; set; }
+    }
 }

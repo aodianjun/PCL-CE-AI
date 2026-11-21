@@ -541,9 +541,6 @@ public sealed class AiChatService
         if (!IsConfigured)
             return;
 
-        // 崩溃可能发生在任意页面，先把用户带回启动页的对话界面。
-        PageRouter.Navigate(PageIds.Launch);
-
         var note = new AiChatMessage
         {
             Role = AiRole.System,
@@ -1005,7 +1002,8 @@ public sealed class AiChatService
         builder.AppendLine("2. 能直接执行的操作（启动游戏、切换版本、启用/禁用 Mod、打开页面等）直接调用工具执行，然后告诉用户结果。");
         builder.AppendLine("3. 涉及删除 Mod、删除版本等不可逆操作时，先向用户确认。");
         builder.AppendLine("4. 回答简洁，先给结论，再给步骤。");
-        builder.AppendLine("5. 用户只说“启动”“开游戏”时，直接调用 launch_game。");
+        builder.AppendLine("5. 不要主动切换用户正在看的页面。只有用户明确说“打开/跳转某个页面”时，才把 open_page、search_resource、install_version_note 的 navigate 参数设为 true；其余情况保持 false，只告诉用户页面位置。");
+        builder.AppendLine("6. 用户只说“启动”“开游戏”时，直接调用 launch_game。");
         builder.AppendLine();
         builder.AppendLine("当前启动器环境：");
         builder.AppendLine(minecraft);

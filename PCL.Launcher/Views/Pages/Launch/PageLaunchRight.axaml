@@ -78,17 +78,39 @@
                     <TextBlock FontSize="15"
                                VerticalAlignment="Center"
                                Text="{loc:Loc Launch.Ai.Title}" />
-                    <Image x:Name="ImgThinking"
-                           Width="20"
-                           Height="20"
-                           IsVisible="False"
-                           Source="avares://PCL.Launcher/Assets/Images/Blocks/Grass.png"
-                           Stretch="Uniform"
-                           RenderTransformOrigin="0.5,0.5">
-                        <Image.RenderTransform>
-                            <RotateTransform />
-                        </Image.RenderTransform>
-                    </Image>
+                    <StackPanel x:Name="PanThinking"
+                                Orientation="Horizontal"
+                                Spacing="2"
+                                VerticalAlignment="Center"
+                                IsVisible="False">
+                        <Image Width="18"
+                               Height="18"
+                               Source="avares://PCL.Launcher/Assets/Images/Blocks/Grass.png"
+                               Stretch="Uniform"
+                               RenderTransformOrigin="0.5,0.5">
+                            <Image.RenderTransform>
+                                <RotateTransform />
+                            </Image.RenderTransform>
+                        </Image>
+                        <Image Width="18"
+                               Height="18"
+                               Source="avares://PCL.Launcher/Assets/Images/Blocks/Grass.png"
+                               Stretch="Uniform"
+                               RenderTransformOrigin="0.5,0.5">
+                            <Image.RenderTransform>
+                                <RotateTransform />
+                            </Image.RenderTransform>
+                        </Image>
+                        <Image Width="18"
+                               Height="18"
+                               Source="avares://PCL.Launcher/Assets/Images/Blocks/Grass.png"
+                               Stretch="Uniform"
+                               RenderTransformOrigin="0.5,0.5">
+                            <Image.RenderTransform>
+                                <RotateTransform />
+                            </Image.RenderTransform>
+                        </Image>
+                    </StackPanel>
                     <Border Padding="7,2"
                             CornerRadius="4"
                             Background="{DynamicResource ColorBrushToolTip}">
