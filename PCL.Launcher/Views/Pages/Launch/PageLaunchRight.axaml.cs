@@ -806,15 +806,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             return;
 
         var usage = AiChatService.Instance.GetContextUsage();
-        var threshold = 16000;
-        try
-        {
-            threshold = Config.Ai.CompressThreshold;
-        }
-        catch (Exception)
-        {
-            // 忽略配置读取失败。
-        }
+        var threshold = Math.Max(4000, (int)(usage.Limit * 0.6));
 
         var content = string.Join(
             Environment.NewLine,

@@ -123,7 +123,7 @@
     <sys:String x:Key="Launch.Ai.Context.EstimatedTokens">Estimated tokens: {0}</sys:String>
     <sys:String x:Key="Launch.Ai.Context.Limit">Context limit: {0} tokens</sys:String>
     <sys:String x:Key="Launch.Ai.Context.Percent">Used: {0}%</sys:String>
-    <sys:String x:Key="Launch.Ai.Context.Threshold">Compression threshold: {0} characters</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Threshold">Auto-compress threshold: ~{0} tokens</sys:String>
     <sys:String x:Key="Launch.Ai.Context.HasSummary">Has summary: {0}</sys:String>
     <sys:String x:Key="Launch.Ai.Thinking">Thinking...</sys:String>
     <sys:String x:Key="Launch.Ai.ToolCalling">Calling tools...</sys:String>

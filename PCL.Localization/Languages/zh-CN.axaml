@@ -3796,7 +3796,7 @@
     <sys:String x:Key="Launch.Ai.Context.EstimatedTokens">估算 tokens：{0}</sys:String>
     <sys:String x:Key="Launch.Ai.Context.Limit">上下文上限：{0} tokens</sys:String>
     <sys:String x:Key="Launch.Ai.Context.Percent">已用：{0}%</sys:String>
-    <sys:String x:Key="Launch.Ai.Context.Threshold">压缩阈值：{0} 字符</sys:String>
+    <sys:String x:Key="Launch.Ai.Context.Threshold">自动压缩阈值：约 {0} tokens</sys:String>
     <sys:String x:Key="Launch.Ai.Context.HasSummary">已有摘要：{0}</sys:String>
     <sys:String x:Key="Launch.Ai.Thinking">正在思考…</sys:String>
     <sys:String x:Key="Launch.Ai.ToolCalling">正在调用工具…</sys:String>

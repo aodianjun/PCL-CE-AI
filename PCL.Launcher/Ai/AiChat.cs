@@ -378,7 +378,8 @@ public sealed class AiChatService
             snapshot = _messages
                 .Where(message => !message.IsHidden
                                   && !string.IsNullOrWhiteSpace(message.Content)
-                                  && message.Role is AiRole.User or AiRole.Assistant)
+                                  && message.Role is AiRole.User or AiRole.Assistant
+                                  && message.ToolCalls.Count == 0)
                 .ToList();
 
         if (snapshot.Count < 4)
@@ -426,11 +427,9 @@ public sealed class AiChatService
     private async Task AutoCompressIfNeededAsync(CancellationToken ct)
     {
         bool enabled;
-        int threshold;
         try
         {
             enabled = Config.Ai.AutoCompress;
-            threshold = Math.Max(4000, Config.Ai.CompressThreshold);
         }
         catch (Exception)
         {
@@ -440,12 +439,9 @@ public sealed class AiChatService
         if (!enabled)
             return;
 
-        int chars;
-        lock (_messageLock)
-            chars = _messages
-                .Where(message => !message.IsHidden)
-                .Sum(message => message.Content.Length);
-        if (chars < threshold)
+        var usage = GetContextUsage();
+        var tokenThreshold = Math.Max(4000, (int)(usage.Limit * 0.6));
+        if (usage.EstimatedTokens < tokenThreshold)
             return;
 
         StatusChanged?.Invoke("上下文较长，正在压缩…");
@@ -942,12 +938,36 @@ public sealed class AiChatService
             }
         };
 
-        foreach (var message in Messages)
+        var history = Messages.ToList();
+        HashSet<string>? pendingToolIds = null;
+
+        for (var index = 0; index < history.Count; index++)
         {
+            var message = history[index];
             if (message.IsError)
                 continue;
             if (message.Role == AiRole.System && !message.IsHidden)
                 continue;
+
+            if (message.Role == AiRole.Tool)
+            {
+                // 只保留紧跟在对应 tool_calls 后面、且 id 能对上的工具结果，
+                // 否则接口会以 400 拒绝整个请求。
+                if (pendingToolIds is null
+                    || !pendingToolIds.Remove(message.ToolCallId ?? ""))
+                    continue;
+
+                messages.Add(new JsonObject
+                {
+                    ["role"] = "tool",
+                    ["tool_call_id"] = message.ToolCallId ?? "",
+                    ["content"] = message.Content
+                });
+                continue;
+            }
+
+            pendingToolIds = null;
+
             if (message.Role == AiRole.Assistant
                 && message.ToolCalls.Count == 0
                 && string.IsNullOrWhiteSpace(message.Content))
@@ -959,18 +979,25 @@ public sealed class AiChatService
                 {
                     AiRole.User => "user",
                     AiRole.Assistant => "assistant",
-                    AiRole.Tool => "tool",
                     _ => "system"
                 }
             };
 
-            if (message.Role == AiRole.Tool)
+            if (message.Role == AiRole.Assistant && message.ToolCalls.Count > 0)
             {
-                item["tool_call_id"] = message.ToolCallId ?? "";
-                item["content"] = message.Content;
-            }
-            else if (message.Role == AiRole.Assistant && message.ToolCalls.Count > 0)
-            {
+                if (!HasCompleteToolResults(history, index))
+                {
+                    if (string.IsNullOrWhiteSpace(message.Content))
+                        continue;
+                    item["content"] = message.Content;
+                    messages.Add(item);
+                    continue;
+                }
+
+                pendingToolIds = message.ToolCalls
+                    .Select(call => call.Id)
+                    .Where(id => !string.IsNullOrEmpty(id))
+                    .ToHashSet();
                 item["content"] = string.IsNullOrEmpty(message.Content)
                     ? null
                     : message.Content;
@@ -1057,6 +1084,23 @@ public sealed class AiChatService
             payload["tools"] = AiTools.BuildDefinitions();
 
         return payload;
+    }
+
+    /// <summary>检查该助手消息的工具调用是否都有紧跟着的结果消息。</summary>
+    private static bool HasCompleteToolResults(
+        IReadOnlyList<AiChatMessage> history,
+        int index)
+    {
+        var ids = history[index].ToolCalls
+            .Select(call => call.Id)
+            .Where(id => !string.IsNullOrEmpty(id))
+            .ToHashSet();
+        if (ids.Count == 0)
+            return true;
+
+        for (var i = index + 1; i < history.Count && history[i].Role == AiRole.Tool; i++)
+            ids.Remove(history[i].ToolCallId ?? "");
+        return ids.Count == 0;
     }
 
     private static string BuildSystemPrompt()
