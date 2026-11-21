@@ -373,9 +373,46 @@ public static class AiTools
 
     private static IEnumerable<McInstance> EnumerateInstances()
     {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var group in InstanceList.mcInstanceList.Values)
         foreach (var instance in group)
-            yield return instance;
+            if (!string.IsNullOrWhiteSpace(instance.Name) && seen.Add(instance.Name))
+                yield return instance;
+
+        // 启动页有时会直接从配置里恢复选中实例，此时实例列表加载器并未运行，
+        // mcInstanceList 会是空的；这里补上当前实例并扫描 versions 目录兜底。
+        var selected = InstanceList.McMcInstanceSelected;
+        if (selected is not null && seen.Add(selected.Name))
+            yield return selected;
+
+        if (InstanceList.mcInstanceList.Count > 0)
+            yield break;
+
+        var versionsFolder = Path.Combine(ResolveMinecraftFolder(), "versions");
+        if (!Directory.Exists(versionsFolder))
+            yield break;
+
+        IEnumerable<string> directories;
+        try
+        {
+            directories = Directory.EnumerateDirectories(versionsFolder);
+        }
+        catch (Exception)
+        {
+            yield break;
+        }
+
+        foreach (var directory in directories)
+        {
+            var name = Path.GetFileName(directory);
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+            if (!File.Exists(Path.Combine(directory, name + ".json"))
+                && !File.Exists(Path.Combine(directory, "version.json")))
+                continue;
+            if (seen.Add(name))
+                yield return new McInstance(directory);
+        }
     }
 
     private static string SelectInstance(string? name)
