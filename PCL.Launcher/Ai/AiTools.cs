@@ -1157,17 +1157,63 @@ public static class AiTools
         return "已在资源管理器中打开：" + directory;
     }
 
-    // 元数据接口必须快速失败，否则国内直连 Modrinth / Mojang 会卡住整轮对话。
-    private static readonly HttpClient MetadataHttp = new()
+    private static HttpClient CreateHttp(bool useProxy, TimeSpan timeout)
     {
-        Timeout = TimeSpan.FromSeconds(30)
-    };
+        var client = new HttpClient(new SocketsHttpHandler
+        {
+            UseProxy = useProxy,
+            ConnectTimeout = TimeSpan.FromSeconds(10)
+        })
+        {
+            Timeout = timeout
+        };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("PCL-CE-AI");
+        return client;
+    }
+
+    // 元数据接口必须快速失败，否则国内直连 Modrinth / Mojang 会卡住整轮对话。
+    private static readonly HttpClient MetadataHttp = CreateHttp(false, TimeSpan.FromSeconds(30));
+    private static readonly HttpClient MetadataProxyHttp = CreateHttp(true, TimeSpan.FromSeconds(30));
 
     // 实际文件下载才允许更长时间（Mod jar 可能几十 MB）。
-    private static readonly HttpClient DownloadHttp = new()
+    private static readonly HttpClient DownloadHttp = CreateHttp(false, TimeSpan.FromMinutes(5));
+    private static readonly HttpClient DownloadProxyHttp = CreateHttp(true, TimeSpan.FromMinutes(5));
+
+    /// <summary>
+    /// 先直连；如果系统里留着一个已经失效的代理（常见于代理软件退出后
+    /// ProxyServer 还留在注册表里），直连反而可能被 HttpClient 带进死代理，
+    /// 这里在 SSL/连接失败时再用系统代理重试一次。
+    /// </summary>
+    private static async Task<HttpResponseMessage> GetWithFallbackAsync(
+        string url,
+        HttpClient direct,
+        HttpClient viaProxy,
+        CancellationToken ct)
     {
-        Timeout = TimeSpan.FromMinutes(5)
-    };
+        try
+        {
+            return await direct.GetAsync(url, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+            LogWrapper.Warn("Ai", $"直连失败，改用系统代理重试：{ex.Message}");
+            return await viaProxy.GetAsync(url, ct);
+        }
+    }
+
+    private static Task<HttpResponseMessage> MetadataGetAsync(string url, CancellationToken ct)
+    {
+        return GetWithFallbackAsync(url, MetadataHttp, MetadataProxyHttp, ct);
+    }
+
+    private static Task<HttpResponseMessage> DownloadGetAsync(string url, CancellationToken ct)
+    {
+        return GetWithFallbackAsync(url, DownloadHttp, DownloadProxyHttp, ct);
+    }
 
     private static JsonObject? _versionManifest;
     private static DateTime _versionManifestAt;
@@ -1178,11 +1224,9 @@ public static class AiTools
             && DateTime.UtcNow - _versionManifestAt < TimeSpan.FromMinutes(10))
             return _versionManifest;
 
-        using var request = new HttpRequestMessage(
-            HttpMethod.Get,
-            "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json");
-        request.Headers.UserAgent.ParseAdd("PCL-CE-AI");
-        using var response = await MetadataHttp.SendAsync(request, ct);
+        using var response = await MetadataGetAsync(
+            "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json",
+            ct);
         response.EnsureSuccessStatusCode();
         var json = JsonNode.Parse(await response.Content.ReadAsStringAsync(ct)) as JsonObject
                    ?? throw new InvalidOperationException("版本清单为空。");
@@ -1195,7 +1239,7 @@ public static class AiTools
         string gameVersion,
         CancellationToken ct)
     {
-        using var response = await MetadataHttp.GetAsync(
+        using var response = await MetadataGetAsync(
             "https://meta.fabricmc.net/v2/versions/loader/"
             + Uri.EscapeDataString(gameVersion),
             ct);
@@ -1355,9 +1399,7 @@ public static class AiTools
 
     private static async Task<JsonNode?> GetJsonAsync(string url, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.UserAgent.ParseAdd("PCL-CE-AI");
-        using var response = await MetadataHttp.SendAsync(request, ct);
+        using var response = await MetadataGetAsync(url, ct);
         if (!response.IsSuccessStatusCode)
             return null;
         return JsonNode.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -1453,7 +1495,7 @@ public static class AiTools
 
         try
         {
-            using var response = await DownloadHttp.GetAsync(fileUrl, ct);
+            using var response = await DownloadGetAsync(fileUrl, ct);
             response.EnsureSuccessStatusCode();
             await using var stream = File.Create(targetPath);
             await response.Content.CopyToAsync(stream, ct);
