@@ -20,7 +20,8 @@
         Title="PCL CE-AI">
     <Grid x:Name="PanRoot"
           Background="Transparent">
-        <ui:MyDropShadow Color="#21000000"
+        <ui:MyDropShadow x:Name="ShadowHost"
+                         Color="#21000000"
                          ShadowRadius="10"
                          CornerRadius="6"
                          CenterTransparent="True">
