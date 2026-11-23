@@ -76,6 +76,14 @@ dotnet build PCL.Launcher/PCL.Launcher.csproj -c Debug
 
 「设置 → 更新」检查本仓库的 GitHub Releases。发布一个 tag 形如 `v2.15.2` 的 Release 后，启动器就会自动识别并提供下载入口。
 
+## 上游同步
+
+仓库带有 `.github/workflows/sync-upstream.yml`：
+
+- 每天 04:00 UTC 自动检查 `PCL-Community/PCL-CE` 的 `dev` 分支，也可以手动触发。
+- 使用 merge 而不是 force push；冲突代码块保留本仓库的版本（`-X ours`），上游新增文件和非冲突改动会正常合入。
+- 不会覆盖 AI 启动页、设置归类等本地改动；如果上游改动很大，建议合并后本地跑一次构建确认。
+
 ## 反馈
 
 - Issues：<https://github.com/aodianjun/PCL-CE-AI/issues>

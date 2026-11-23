@@ -76,6 +76,14 @@ The script disables shared compilation, forces a rebuild and verifies that the c
 
 Settings → Update checks GitHub Releases of this repository. Publish a release tagged like `v2.15.2` and the launcher will detect it and offer the download link.
 
+## Upstream sync
+
+The repository ships `.github/workflows/sync-upstream.yml`:
+
+- Checks `PCL-Community/PCL-CE` `dev` daily at 04:00 UTC, or run it manually.
+- Uses a merge, never a force push; conflicting hunks keep this repository's version (`-X ours`), while new upstream files and non-conflicting changes are merged.
+- Local AI features and settings changes are preserved; run a build after large upstream merges.
+
 ## Feedback
 
 - Issues: <https://github.com/aodianjun/PCL-CE-AI/issues>

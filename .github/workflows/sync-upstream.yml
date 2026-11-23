@@ -1,0 +1,72 @@
+name: Sync upstream PCL CE
+
+on:
+  schedule:
+    # 每天 04:00 UTC（北京时间 12:00）检查一次上游
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/PCL-Community/PCL-CE.git 2>/dev/null || true
+          # 上游默认分支是 dev；如果以后改成 main，这里会自动回退
+          if git fetch upstream dev --no-tags; then
+            echo "UPSTREAM_BRANCH=dev" >> "$GITHUB_ENV"
+          else
+            git fetch upstream main --no-tags
+            echo "UPSTREAM_BRANCH=main" >> "$GITHUB_ENV"
+          fi
+
+      - name: Check whether already up to date
+        id: check
+        run: |
+          if git merge-base --is-ancestor "upstream/$UPSTREAM_BRANCH" HEAD; then
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge upstream (keep local changes on conflicts)
+        if: steps.check.outputs.up_to_date == 'false'
+        run: |
+          # -X ours：只有发生冲突的代码块保留本地版本；
+          # 上游新增的文件、未冲突的改动仍会正常合并进来。
+          if git merge --no-ff --no-edit -X ours \
+              -m "chore: sync upstream PCL CE ($UPSTREAM_BRANCH)" \
+              "upstream/$UPSTREAM_BRANCH"; then
+            echo "Merged cleanly with local-wins on conflicts."
+          else
+            # 兜底：极少数 rename/delete 之类的冲突，-X ours 覆盖不到，
+            # 统一保留本地版本后完成合并，绝不丢弃本地改动。
+            echo "::warning::Merge produced non-hunk conflicts; keeping local files."
+            git checkout --ours -- . || true
+            git add -A
+            git commit -m "chore: sync upstream PCL CE ($UPSTREAM_BRANCH, keep local changes)"
+          fi
+
+      - name: Push
+        if: steps.check.outputs.up_to_date == 'false'
+        run: git push origin main
