@@ -31,7 +31,7 @@ PCL CE-AI 把原本分散在主界面的操作交给 AI 助手：你可以直接
 - **DeepSeek harness**：兼容 OpenAI `/chat/completions` 的任意接口，默认 `deepseek-chat`，API Key 本地加密保存。
 - **首次启动引导**：未配置 API Key 时自动进入「设置 → AI 接入」，内置获取 Key 与测试连接的步骤。
 - **设置页整合**：下载、Mod、整合包、资源包、光影、世界、数据包、实例设置、日志、任务管理、联机工具全部收进设置。
-- **微软正版登录**：支持编译期注入 Azure 客户端 ID，产物在任何设备上都能直接正版登录（需 Mojang AppID 审核）。
+- **微软正版登录**：支持编译期注入 Azure 客户端 ID，产物在任何设备上都能直接正版登录（客户端 ID 已通过 Mojang AppID 审核，2026-11-24）。
 - **外置登录**：第三方验证（authlib-injector）与离线登录不再要求先完成一次微软正版登录，Release 版也可直接创建档案。
 - **更新走 GitHub Releases**：不再连接官方更新源，避免被自动更新回官方版本。
 
@@ -70,7 +70,7 @@ dotnet build PCL.Launcher/PCL.Launcher.csproj -c Debug
 
 脚本会关闭共享编译并强制 Rebuild，构建后自动校验客户端 ID 是否写入 `PCL.Core.dll`。
 
-> 第三方应用调用 Minecraft API 前需要通过 Mojang 的 [AppID 审核](https://aka.ms/mce-reviewappid)；审核通过前微软登录会在最后一步返回 403。审核期间可以使用离线登录或第三方验证登录。
+> 第三方应用调用 Minecraft API 前需要通过 Mojang 的 [AppID 审核](https://aka.ms/mce-reviewappid)。本项目使用的客户端 ID 已于 2026-11-24 通过审核，微软正版登录可直接使用；如果你换成自己的客户端 ID，仍需自行提交审核，未通过时登录会在最后一步返回 403。
 
 ## 更新
 

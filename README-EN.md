@@ -31,7 +31,7 @@ PCL CE-AI lets the AI assistant drive the launcher: ask it to "launch the game",
 - **DeepSeek harness**: works with any OpenAI-compatible `/chat/completions` endpoint; defaults to `deepseek-chat`. The API key is stored encrypted locally.
 - **First-run onboarding**: opens Settings → AI setup automatically when no key is configured.
 - **Settings consolidation**: downloads, mods, modpacks, resource packs, shaders, worlds, datapacks, instance settings, logs, tasks and tools all live under Settings.
-- **Microsoft sign-in**: the Azure client ID is embedded at build time, so every device running the build can sign in directly (subject to Mojang AppID review).
+- **Microsoft sign-in**: the Azure client ID is embedded at build time, so every device running the build can sign in directly (the client ID passed Mojang AppID review on 2026-11-24).
 - **Third-party login**: authlib-injector and offline profiles no longer require a Microsoft profile first, including in Release builds.
 - **GitHub Releases updates**: no longer uses the official update source, so the build cannot be replaced by upstream releases.
 
@@ -70,7 +70,7 @@ You need your own Azure app registration (public client, device code flow, `Xbox
 
 The script disables shared compilation, forces a rebuild and verifies that the client ID was written into `PCL.Core.dll`.
 
-> Third-party apps must pass Mojang's [AppID review](https://aka.ms/mce-reviewappid) before calling the Minecraft API. Until then, Microsoft sign-in fails with 403 at the final step. Offline or third-party login still works.
+> Third-party apps must pass Mojang's [AppID review](https://aka.ms/mce-reviewappid) before calling the Minecraft API. The client ID used by this project passed review on 2026-11-24, so Microsoft sign-in works out of the box; if you switch to your own client ID, you must submit it for review yourself, otherwise sign-in fails with 403 at the final step.
 
 ## Updates
 

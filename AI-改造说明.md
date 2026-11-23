@@ -135,8 +135,8 @@ Release 构建默认不读运行时环境变量，必须在**编译期**把客�
    $env:PCL_MS_CLIENT_ID = "<你的客户端 ID>"
    dotnet build PCL.Launcher/PCL.Launcher.csproj -c Release -p:UseSharedCompilation=false -t:Rebuild
    ```
-3. **向 Mojang 提交应用审核**：在 <https://aka.ms/mce-reviewappid> 填写应用名称、客户端 ID 与用途说明。第三方应用调用 `api.minecraftservices.com` 前必须通过该审核，否则登录会在最后一步返回 `403 Invalid app registration`。审核通常需要数天到数周。
-4. 分发 `PCL.Launcher/bin/Release` 下的产物。目标设备无需任何环境变量，直接正版登录（前提是审核已通过）。
+3. **向 Mojang 提交应用审核**：在 <https://aka.ms/mce-reviewappid> 填写应用名称、客户端 ID 与用途说明。第三方应用调用 `api.minecraftservices.com` 前必须通过该审核，否则登录会在最后一步返回 `403 Invalid app registration`。审核通常需要数天到数周。本项目使用的客户端 ID 已于 2026-11-24 通过审核；换成自己的客户端 ID 时仍需重新提交。
+4. 分发 `PCL.Launcher/bin/Release` 下的产物。目标设备无需任何环境变量，直接正版登录（本项目客户端 ID 已通过审核）。
 
 说明：公共客户端的客户端 ID 会随二进制公开，这不是密钥；不要往应用里放 client secret。所有使用该构建的玩家都会共享你注册的这个 Azure 应用的配额。官方 PCL CE-AI 的客户端 ID 属于其发布方，本项目不会去提取或借用。
 
