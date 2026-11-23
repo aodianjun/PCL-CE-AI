@@ -109,6 +109,7 @@ dotnet test PCL.Core.Test/PCL.Core.Test.csproj --filter "FullyQualifiedName~Loca
 
 - 仓库本身不包含微软 OAuth 客户端 ID；官方发布版由 CI 通过 `PCL_MS_CLIENT_ID` 注入（见 `.github/workflows/reusable-build.yml`）。
 - 本地 Debug 构建没有该密钥时，微软登录会失败，日志中为 `Microsoft OAuth client id is not configured.`。现在点“开始正版验证”会直接提示缺少客户端 ID，并建议改用离线/第三方登录。
+- 去掉了 PCL CE 的「必须先完成一次微软正版登录才能创建第三方/离线档案」限制：Release 构建也可直接使用外置登录。
 - 想在本地临时使用正版登录：注册一个 Azure 应用（公共客户端、允许设备代码流、勾选 Xbox Live 相关权限），启动前设置环境变量 `PCL_MS_CLIENT_ID=<客户端 ID>`。Debug 构建会在运行时读取该环境变量。
 
 ### 让所有设备直接可用正版登录

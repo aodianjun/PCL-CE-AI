@@ -683,20 +683,9 @@ public partial class PageInstanceSetupViewModel : ViewModelBase
 
     public static bool CanCreateOtherProfile()
     {
-#if DEBUG || DEBUGCI
+        // PCL CE-AI：去掉“必须先完成一次微软正版验证”的限制，
+        // 允许第三方验证 / 离线登录直接创建档案（微软登录仍需 Mojang 应用审核）。
         return true;
-#else
-        try
-        {
-            return ProfileService.HasMicrosoftProfile
-                   || (Lang.IsFeaturesUnrestricted && ProfileService.Profiles.Count > 0)
-                   || !NetworkHelper.IsNetworkAvailable();
-        }
-        catch
-        {
-            return false;
-        }
-#endif
     }
 
     public async Task<bool> ApplyRendererAsync(int index)

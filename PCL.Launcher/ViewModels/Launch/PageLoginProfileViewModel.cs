@@ -68,7 +68,7 @@ public partial class PageLoginProfileViewModel : ViewModelBase
         {
             var isEmpty = Profiles.Count == 0;
             ShowSelectHint = !isEmpty;
-            ShowMicrosoftHint = isEmpty;
+            ShowMicrosoftHint = isEmpty && !PageInstanceSetupViewModel.CanCreateOtherProfile();
             ShowCreateHint = isEmpty;
             if (isEmpty)
                 States.Hint.LaunchWithProfile = true;

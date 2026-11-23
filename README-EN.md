@@ -31,7 +31,8 @@ PCL CE-AI lets the AI assistant drive the launcher: ask it to "launch the game",
 - **DeepSeek harness**: works with any OpenAI-compatible `/chat/completions` endpoint; defaults to `deepseek-chat`. The API key is stored encrypted locally.
 - **First-run onboarding**: opens Settings → AI setup automatically when no key is configured.
 - **Settings consolidation**: downloads, mods, modpacks, resource packs, shaders, worlds, datapacks, instance settings, logs, tasks and tools all live under Settings.
-- **Microsoft sign-in**: the Azure client ID is embedded at build time, so every device running the build can sign in directly.
+- **Microsoft sign-in**: the Azure client ID is embedded at build time, so every device running the build can sign in directly (subject to Mojang AppID review).
+- **Third-party login**: authlib-injector and offline profiles no longer require a Microsoft profile first, including in Release builds.
 - **GitHub Releases updates**: no longer uses the official update source, so the build cannot be replaced by upstream releases.
 
 ## Conversations and context
