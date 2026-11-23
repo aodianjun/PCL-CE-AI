@@ -327,9 +327,17 @@ public static class AiTools
                 _ => $"未知工具：{call.Name}"
             };
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            // 用户主动取消 / 整个对话被取消，继续向上传递。
             throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            // HttpClient 超时也会抛 TaskCanceledException；这不是用户取消，
+            // 当成一次工具失败返回给模型，让 AI 可以重试或换方案。
+            LogWrapper.Warn("Ai", $"工具 {call.Name} 网络超时：{ex.Message}");
+            return $"工具执行超时或被网络中断（{call.Name}）：{ex.Message}";
         }
         catch (Exception ex)
         {
@@ -1149,7 +1157,8 @@ public static class AiTools
 
     private static readonly HttpClient DownloadHttp = new()
     {
-        Timeout = TimeSpan.FromSeconds(60)
+        // 下载 Mod / 读取版本元数据可能较慢，外层还有工具超时兜底。
+        Timeout = TimeSpan.FromMinutes(5)
     };
 
     private static JsonObject? _versionManifest;
