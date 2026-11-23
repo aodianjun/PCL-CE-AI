@@ -979,6 +979,7 @@ public static class AiTools
         }
 
         Add(Config.Ai.WorkDirectory);
+        Add(AiChatService.GetWorkspaceDirectory());
         foreach (var item in (Config.Ai.AllowedDirectories ?? "")
                      .Split([';', '|'], StringSplitOptions.RemoveEmptyEntries))
             Add(item);

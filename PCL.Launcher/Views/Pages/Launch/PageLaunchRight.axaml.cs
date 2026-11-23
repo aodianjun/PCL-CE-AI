@@ -196,6 +196,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             AiChatService.Instance.ConversationsChanged += OnConversationsChanged;
             AiChatService.Instance.ConversationSwitched += OnConversationSwitched;
             AiChatService.Instance.ContextUsageChanged += OnContextUsageChanged;
+            PCL.Views.Shell.FileDragHandler.FileDropped += OnFileDropped;
         }
 
         AttachLaunchController();
@@ -224,6 +225,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
             AiChatService.Instance.ConversationsChanged -= OnConversationsChanged;
             AiChatService.Instance.ConversationSwitched -= OnConversationSwitched;
             AiChatService.Instance.ContextUsageChanged -= OnContextUsageChanged;
+            PCL.Views.Shell.FileDragHandler.FileDropped -= OnFileDropped;
         }
 
         if (_viewModel is not null)
@@ -453,7 +455,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
                 break;
             }
 
-            AddAttachmentFromPath(file);
+            await AddAttachmentFromPathAsync(file);
         }
 
         RebuildPendingAttachments();
@@ -496,7 +498,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
                         break;
                     }
 
-                    AddAttachmentFromPath(path);
+                    await AddAttachmentFromPathAsync(path);
                 }
 
                 RebuildPendingAttachments();
@@ -546,28 +548,36 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         }
     }
 
-    private bool AddAttachmentFromPath(string file)
+    private static readonly string[] InlineImageExtensions =
+        [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"];
+
+    private static readonly string[] InlineTextExtensions =
+    [
+        ".txt", ".md", ".json", ".log", ".yml", ".yaml", ".toml", ".ini", ".cfg",
+        ".conf", ".xml", ".html", ".css", ".js", ".ts", ".cs", ".java", ".kt",
+        ".py", ".sh", ".ps1", ".bat", ".csv", ".mcmeta", ".lang"
+    ];
+
+    private async Task<bool> AddAttachmentFromPathAsync(string file)
     {
         try
         {
             if (Directory.Exists(file))
+            {
+                HintService.Show(Hints.Warning(
+                    Lang.Text("Launch.Ai.Attachment.Directory", Path.GetFileName(file))));
                 return false;
+            }
 
             var info = new FileInfo(file);
             if (!info.Exists)
                 return false;
 
             var extension = Path.GetExtension(file).ToLowerInvariant();
-            var imageExtensions = new[] { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" };
-            if (imageExtensions.Contains(extension))
-            {
-                if (info.Length > 8 * 1024 * 1024)
-                {
-                    HintService.Show(Hints.Warning(
-                        Lang.Text("Launch.Ai.Attachment.TooLarge", info.Name)));
-                    return false;
-                }
+            var isImage = InlineImageExtensions.Contains(extension);
 
+            if (isImage && info.Length <= 8 * 1024 * 1024)
+            {
                 var mime = extension switch
                 {
                     ".png" => "image/png",
@@ -576,7 +586,8 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
                     ".bmp" => "image/bmp",
                     _ => "image/jpeg"
                 };
-                var data = Convert.ToBase64String(File.ReadAllBytes(file));
+                var bytes = await File.ReadAllBytesAsync(file);
+                var data = Convert.ToBase64String(bytes);
                 _pendingAttachments.Add(new AiAttachment
                 {
                     Name = info.Name,
@@ -586,20 +597,28 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
                 return true;
             }
 
-            if (info.Length > 1024 * 1024)
+            if (!isImage
+                && InlineTextExtensions.Contains(extension)
+                && info.Length <= 1024 * 1024)
             {
-                HintService.Show(Hints.Warning(
-                    Lang.Text("Launch.Ai.Attachment.TooLarge", info.Name)));
-                return false;
+                var text = await File.ReadAllTextAsync(file);
+                if (text.Length > 200000)
+                    text = text[..200000] + Environment.NewLine + "…（已截断）";
+                _pendingAttachments.Add(new AiAttachment
+                {
+                    Name = info.Name,
+                    TextContent = text
+                });
+                return true;
             }
 
-            var text = File.ReadAllText(file);
-            if (text.Length > 200000)
-                text = text[..200000] + Environment.NewLine + "…（已截断）";
+            // 大文件、二进制或不适合内联的图片：复制到工作区，让 AI 用文件工具读取。
+            var target = await CopyAttachmentToWorkspaceAsync(file);
             _pendingAttachments.Add(new AiAttachment
             {
                 Name = info.Name,
-                TextContent = text
+                IsImage = isImage,
+                LocalPath = target
             });
             return true;
         }
@@ -611,6 +630,57 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         }
     }
 
+    /// <summary>把附件复制到 AI 工作区（未配置时为 PCL/AiWorkspace），返回新路径。</summary>
+    private static async Task<string> CopyAttachmentToWorkspaceAsync(string file)
+    {
+        var root = AiChatService.GetWorkspaceDirectory();
+        Directory.CreateDirectory(root);
+
+        var name = Path.GetFileName(file);
+        if (string.IsNullOrWhiteSpace(name))
+            name = "attachment";
+        if (name.Length > 120)
+            name = name[^120..];
+
+        var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+        var target = Path.Combine(root, $"{stamp}-{name}");
+        var index = 1;
+        while (File.Exists(target))
+            target = Path.Combine(root, $"{stamp}-{index++}-{name}");
+
+        await Task.Run(() => File.Copy(file, target));
+        return target;
+    }
+
+    /// <summary>
+    /// 主窗口的拖放会先交给页面。启动页把拖进来的文件全部当成对话附件：
+    /// 小文件就地内联，大文件复制到工作区后把路径交给 AI。
+    /// </summary>
+    private bool OnFileDropped(IReadOnlyList<string> paths)
+    {
+        if (PageRouter.Current.Page != PageIds.Launch)
+            return false;
+
+        Dispatcher.UIThread.Post(() => _ = AddDroppedFilesAsync(paths));
+        return true;
+    }
+
+    private async Task AddDroppedFilesAsync(IReadOnlyList<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            if (_pendingAttachments.Count >= 6)
+            {
+                HintService.Show(Hints.Warning(Lang.Text("Launch.Ai.Attachment.Limit")));
+                break;
+            }
+
+            await AddAttachmentFromPathAsync(path);
+        }
+
+        RebuildPendingAttachments();
+    }
+
     private void RebuildPendingAttachments()
     {
         _panPendingAttachments.Children.Clear();
@@ -619,7 +689,10 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         {
             var label = new TextBlock
             {
-                Text = (attachment.IsImage ? "🖼 " : "📎 ") + attachment.Name,
+                Text = (attachment.IsImage ? "🖼 " : "📎 ") + attachment.Name
+                       + (attachment.LocalPath is null
+                           ? ""
+                           : " → " + Lang.Text("Launch.Ai.Attachment.Workspace")),
                 FontSize = 11,
                 MaxWidth = 180,
                 TextTrimming = TextTrimming.CharacterEllipsis,

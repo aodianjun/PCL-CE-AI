@@ -167,19 +167,8 @@ public sealed class FileDragHandler
             return;
         }
 
-        if (paths.Count > 1 && !IsSameAcceptedType(paths))
-        {
-            HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.SameTypeOnly")));
-            return;
-        }
-
-        var extension = Path.GetExtension(paths[0]).ToLowerInvariant();
-        if (extension is ".xaml" or ".axaml")
-        {
-            await LoadCustomHomepage(paths[0]);
-            return;
-        }
-
+        // 先让当前页面接管：启动页会把任意文件收作 AI 对话附件，
+        // 不能在这里按“同类型”提前拦掉。
         foreach (var handler in FileDropped
                      ?.GetInvocationList()
                      .Cast<Func<IReadOnlyList<string>, bool>>()
@@ -193,6 +182,19 @@ public sealed class FileDragHandler
             {
                 LogWrapper.Error(ex, "UI", $"页面处理拖放文件失败：{paths[0]}");
             }
+
+        if (paths.Count > 1 && !IsSameAcceptedType(paths))
+        {
+            HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.SameTypeOnly")));
+            return;
+        }
+
+        var extension = Path.GetExtension(paths[0]).ToLowerInvariant();
+        if (extension is ".xaml" or ".axaml")
+        {
+            await LoadCustomHomepage(paths[0]);
+            return;
+        }
 
         if (await TryInstallMods(paths))
             return;

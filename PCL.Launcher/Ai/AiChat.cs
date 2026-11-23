@@ -31,6 +31,9 @@ public sealed class AiAttachment
 
     /// <summary>文本文件的正文。</summary>
     public string? TextContent { get; init; }
+
+    /// <summary>附件已复制到本地工作区的路径；大文件或二进制文件走这条路，由 AI 用文件工具读取。</summary>
+    public string? LocalPath { get; init; }
 }
 
 /// <summary>一次工具调用请求。</summary>
@@ -202,6 +205,26 @@ public sealed class AiChatService
     }
 
     public string? LastError { get; private set; }
+
+    /// <summary>
+    /// AI 工作目录。用户配置了就用配置值，否则使用启动器数据目录下的 AiWorkspace。
+    /// 大文件附件会复制到这里，保证 AI 的文件工具一定能读到。
+    /// </summary>
+    public static string GetWorkspaceDirectory()
+    {
+        try
+        {
+            var configured = Config.Ai.WorkDirectory;
+            if (!string.IsNullOrWhiteSpace(configured))
+                return Path.GetFullPath(configured.Trim());
+        }
+        catch (Exception)
+        {
+            // 配置异常时退回默认目录。
+        }
+
+        return Path.Combine(Paths.Data, "AiWorkspace");
+    }
 
     /// <summary>计算当前会话的上下文用量（字符数 + 粗略 token 估算）。</summary>
     public AiContextUsage GetContextUsage()
@@ -1161,6 +1184,14 @@ public sealed class AiChatService
                 var textParts = new System.Text.StringBuilder(message.Content ?? "");
                 foreach (var attachment in message.Attachments)
                 {
+                    if (!string.IsNullOrWhiteSpace(attachment.LocalPath))
+                    {
+                        textParts.Append("\n\n【附件：").Append(attachment.Name)
+                            .Append("，已复制到工作区】\n路径：").Append(attachment.LocalPath)
+                            .Append("\n需要内容时用 read_file / search_files 读取；文件较大时用 max_chars 分段读取。");
+                        continue;
+                    }
+
                     if (attachment.IsImage || string.IsNullOrWhiteSpace(attachment.TextContent))
                         continue;
                     textParts.Append("\n\n【附件：").Append(attachment.Name).Append("】\n")
@@ -1265,6 +1296,7 @@ public sealed class AiChatService
         builder.AppendLine("6. 用户只说“启动”“开游戏”时，直接调用 launch_game。");
         builder.AppendLine("7. 需要看文件时先调用 list_files，再 read_file；只能访问工作目录或允许访问的文件夹，路径越界会被拒绝。");
         builder.AppendLine("8. download_minecraft 与 launch_game 默认 wait=true，会等到安装或启动完成后再返回结果；拿到结果后直接继续下一步，不需要轮询 get_install_status。");
+        builder.AppendLine("9. 用户消息里带“已复制到工作区”的附件时，直接用 read_file（大文件配合 max_chars 分段）或 search_files 读取路径，不要要求用户重新上传。");
         builder.AppendLine();
         builder.AppendLine("当前启动器环境：");
         builder.AppendLine(minecraft);

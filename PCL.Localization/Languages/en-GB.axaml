@@ -3810,6 +3810,8 @@
     <sys:String x:Key="Launch.Ai.Attach">Attach image or file</sys:String>
     <sys:String x:Key="Launch.Ai.Attachment.Limit">Up to 6 attachments.</sys:String>
     <sys:String x:Key="Launch.Ai.Attachment.TooLarge">File too large, skipped: {0}</sys:String>
+    <sys:String x:Key="Launch.Ai.Attachment.Workspace">workspace</sys:String>
+    <sys:String x:Key="Launch.Ai.Attachment.Directory">Folders are not supported: {0}</sys:String>
     <sys:String x:Key="Launch.Ai.Attachment.Failed">Failed to read attachment: {0}</sys:String>
     <sys:String x:Key="Launch.Ai.Attachment.Placeholder">See attachments</sys:String>
     <sys:String x:Key="Setup.Ai.WorkDirectory">Working directory</sys:String>
