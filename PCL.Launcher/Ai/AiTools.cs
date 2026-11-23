@@ -251,7 +251,7 @@ public static class AiTools
         {
             "download_minecraft" => (1800, 60, 3600),
             "launch_game" => (600, 30, 1800),
-            "download_mod" => (180, 30, 600),
+            "download_mod" => (240, 60, 600),
             _ => (60, 10, 300)
         };
         var seconds = requested > 0 ? Math.Clamp(requested, min, max) : defaultSeconds;
@@ -544,6 +544,8 @@ public static class AiTools
             return "当前没有登录账号。请先在“账号”里登录（点击启动页底部的“账号”按钮），再让我启动游戏。";
         if (File.Exists(instance.PathInstance + ".pclignore"))
             return "这个版本正在安装中，暂时不能启动。";
+        if (GameWatcher.hasRunningMinecraft)
+            return "Minecraft 已经在运行了，不需要重复启动。";
 
         await Dispatcher.UIThread.InvokeAsync(() => GameLaunch.McLaunchStart());
         if (!wait)
@@ -1155,9 +1157,15 @@ public static class AiTools
         return "已在资源管理器中打开：" + directory;
     }
 
+    // 元数据接口必须快速失败，否则国内直连 Modrinth / Mojang 会卡住整轮对话。
+    private static readonly HttpClient MetadataHttp = new()
+    {
+        Timeout = TimeSpan.FromSeconds(30)
+    };
+
+    // 实际文件下载才允许更长时间（Mod jar 可能几十 MB）。
     private static readonly HttpClient DownloadHttp = new()
     {
-        // 下载 Mod / 读取版本元数据可能较慢，外层还有工具超时兜底。
         Timeout = TimeSpan.FromMinutes(5)
     };
 
@@ -1174,7 +1182,7 @@ public static class AiTools
             HttpMethod.Get,
             "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json");
         request.Headers.UserAgent.ParseAdd("PCL-CE-AI");
-        using var response = await DownloadHttp.SendAsync(request, ct);
+        using var response = await MetadataHttp.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
         var json = JsonNode.Parse(await response.Content.ReadAsStringAsync(ct)) as JsonObject
                    ?? throw new InvalidOperationException("版本清单为空。");
@@ -1187,7 +1195,7 @@ public static class AiTools
         string gameVersion,
         CancellationToken ct)
     {
-        using var response = await DownloadHttp.GetAsync(
+        using var response = await MetadataHttp.GetAsync(
             "https://meta.fabricmc.net/v2/versions/loader/"
             + Uri.EscapeDataString(gameVersion),
             ct);
@@ -1349,7 +1357,7 @@ public static class AiTools
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.UserAgent.ParseAdd("PCL-CE-AI");
-        using var response = await DownloadHttp.SendAsync(request, ct);
+        using var response = await MetadataHttp.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
             return null;
         return JsonNode.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -1443,11 +1451,26 @@ public static class AiTools
         if (File.Exists(targetPath))
             return $"{title} 已经存在：{targetName}";
 
-        using (var response = await DownloadHttp.GetAsync(fileUrl, ct))
+        try
         {
+            using var response = await DownloadHttp.GetAsync(fileUrl, ct);
             response.EnsureSuccessStatusCode();
             await using var stream = File.Create(targetPath);
             await response.Content.CopyToAsync(stream, ct);
+        }
+        catch
+        {
+            // 超时或断网会留下半截 jar，下次会被误判为“已经存在”，这里清掉。
+            try
+            {
+                if (File.Exists(targetPath))
+                    File.Delete(targetPath);
+            }
+            catch (Exception ex)
+            {
+                LogWrapper.Warn("Ai", $"清理未完成的 Mod 文件失败：{ex.Message}");
+            }
+            throw;
         }
 
         return new JsonObject

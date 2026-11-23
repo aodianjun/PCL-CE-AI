@@ -3783,6 +3783,8 @@
     <sys:String x:Key="Launch.Ai.Compress">壓縮上下文</sys:String>
     <sys:String x:Key="Launch.Ai.Compressed">上下文已壓縮，之後會以摘要繼續。</sys:String>
     <sys:String x:Key="Launch.Ai.Compress.Busy">正在回覆中，請稍後再壓縮。</sys:String>
+    <sys:String x:Key="Launch.Ai.Queued">⏳ 已排隊，目前回覆結束後自動傳送</sys:String>
+    <sys:String x:Key="Launch.Ai.Busy.Wait">目前回覆還在進行中，請等它結束或按停止後再操作。</sys:String>
     <sys:String x:Key="Launch.Ai.Compress.TooShort">目前對話內容較少，不需要壓縮。</sys:String>
     <sys:String x:Key="Setup.Ai.ModelList">模型清單</sys:String>
     <sys:String x:Key="Setup.Ai.FetchModels">取得模型清單</sys:String>

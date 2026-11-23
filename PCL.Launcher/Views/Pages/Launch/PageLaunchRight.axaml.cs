@@ -382,9 +382,9 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
 
     private void UpdateSendState()
     {
-        var busy = AiChatService.Instance.IsBusy;
-        _btnSend.IsEnabled = !busy;
-        _btnCancelReply.IsVisible = busy;
+        // 回复进行中也允许发送：消息会排队，等当前回复结束后自动继续。
+        _btnSend.IsEnabled = true;
+        _btnCancelReply.IsVisible = AiChatService.Instance.IsBusy;
     }
 
     private void Send_OnClick(object? sender, EventArgs e)
@@ -413,12 +413,6 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         {
             AddLocalBubble(Lang.Text("Launch.Ai.NotConfigured"), true);
             PageRouter.Navigate(PageIds.Setup, SubPageIds.SetupAi);
-            return;
-        }
-
-        if (AiChatService.Instance.IsBusy)
-        {
-            AddLocalBubble(Lang.Text("Launch.Ai.Compress.Busy"), true);
             return;
         }
 
@@ -852,6 +846,10 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
                 if (!string.IsNullOrWhiteSpace(message.Reasoning))
                     EnsureReasoningBlock(bubble, message);
             }
+            else if (message.Role == AiRole.User)
+            {
+                bubble.Content.Text = ComposeUserBubbleText(message);
+            }
             else
             {
                 bubble.Content.Text = message.Content;
@@ -936,6 +934,26 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
                 AddBubble(message, false);
     }
 
+    private static string ComposeUserBubbleText(AiChatMessage message)
+    {
+        var display = message.Content ?? "";
+        if (message.Attachments.Count > 0)
+        {
+            var names = string.Join(
+                Environment.NewLine,
+                message.Attachments.Select(attachment =>
+                    (attachment.IsImage ? "🖼 " : "📎 ") + attachment.Name));
+            display = string.IsNullOrWhiteSpace(display)
+                ? names
+                : display + Environment.NewLine + names;
+        }
+
+        if (message.IsQueued)
+            display += (display.Length > 0 ? Environment.NewLine + Environment.NewLine : "")
+                       + Lang.Text("Launch.Ai.Queued");
+        return display;
+    }
+
     private void AddBubble(AiChatMessage message, bool scroll = true)
     {
         if (message.IsHidden)
@@ -966,19 +984,7 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
 
         if (message.Role == AiRole.User)
         {
-            var display = message.Content ?? "";
-            if (message.Attachments.Count > 0)
-            {
-                var names = string.Join(
-                    Environment.NewLine,
-                    message.Attachments.Select(attachment =>
-                        (attachment.IsImage ? "🖼 " : "📎 ") + attachment.Name));
-                display = string.IsNullOrWhiteSpace(display)
-                    ? names
-                    : display + Environment.NewLine + names;
-            }
-
-            content.Text = display;
+            content.Text = ComposeUserBubbleText(message);
             content.Classes.Add("AiBubbleTextUser");
             border.Classes.Add("AiBubbleUser");
             panel.Children.Add(content);

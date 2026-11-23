@@ -56,6 +56,9 @@ public sealed class AiChatMessage
     /// <summary>是否为错误提示气泡。</summary>
     public bool IsError { get; set; }
 
+    /// <summary>是否为排队等待发送的用户消息（尚未进入模型上下文）。</summary>
+    public bool IsQueued { get; set; }
+
     /// <summary>工具调用结果消息对应的调用 ID。</summary>
     public string? ToolCallId { get; init; }
 
@@ -111,6 +114,23 @@ public sealed class AiChatService
     private bool _conversationsLoaded;
 
     private CancellationTokenSource? _cts;
+
+    private readonly Queue<AiChatMessage> _pendingSends = new();
+    private readonly Lock _queueLock = new();
+    private int _pumping;
+
+    /// <summary>排队等待发送的消息数量。</summary>
+    public int QueuedCount
+    {
+        get
+        {
+            lock (_queueLock)
+                return _pendingSends.Count;
+        }
+    }
+
+    /// <summary>排队消息数量发生变化。</summary>
+    public event Action? QueueChanged;
 
     private AiChatService()
     {
@@ -193,7 +213,7 @@ public sealed class AiChatService
         bool hasSummary;
         lock (_messageLock)
         {
-            snapshot = _messages.ToList();
+            snapshot = _messages.Where(message => !message.IsQueued).ToList();
             hasSummary = !string.IsNullOrWhiteSpace(_current.Summary);
         }
 
@@ -227,7 +247,16 @@ public sealed class AiChatService
     /// <summary>新建会话并切换过去。</summary>
     public void NewConversation()
     {
-        if (IsBusy) Cancel();
+        if (IsBusy)
+        {
+            AddMessage(new AiChatMessage
+            {
+                Role = AiRole.Assistant,
+                Content = Lang.Text("Launch.Ai.Busy.Wait"),
+                IsError = true
+            });
+            return;
+        }
         SaveConversations();
 
         var conversation = new AiConversation();
@@ -248,7 +277,16 @@ public sealed class AiChatService
     /// <summary>切换到指定会话。</summary>
     public void SelectConversation(string id)
     {
-        if (IsBusy) Cancel();
+        if (IsBusy)
+        {
+            AddMessage(new AiChatMessage
+            {
+                Role = AiRole.Assistant,
+                Content = Lang.Text("Launch.Ai.Busy.Wait"),
+                IsError = true
+            });
+            return;
+        }
 
         AiConversation? target;
         lock (_messageLock)
@@ -270,7 +308,16 @@ public sealed class AiChatService
     /// <summary>删除会话；若删除的是当前会话，则切换到最近的其它会话。</summary>
     public void DeleteConversation(string id)
     {
-        if (IsBusy) Cancel();
+        if (IsBusy)
+        {
+            AddMessage(new AiChatMessage
+            {
+                Role = AiRole.Assistant,
+                Content = Lang.Text("Launch.Ai.Busy.Wait"),
+                IsError = true
+            });
+            return;
+        }
 
         lock (_messageLock)
         {
@@ -377,6 +424,7 @@ public sealed class AiChatService
         lock (_messageLock)
             snapshot = _messages
                 .Where(message => !message.IsHidden
+                                  && !message.IsQueued
                                   && !string.IsNullOrWhiteSpace(message.Content)
                                   && message.Role is AiRole.User or AiRole.Assistant
                                   && message.ToolCalls.Count == 0)
@@ -510,7 +558,16 @@ public sealed class AiChatService
 
     public void Clear()
     {
-        if (IsBusy) Cancel();
+        if (IsBusy)
+        {
+            AddMessage(new AiChatMessage
+            {
+                Role = AiRole.Assistant,
+                Content = Lang.Text("Launch.Ai.Busy.Wait"),
+                IsError = true
+            });
+            return;
+        }
         lock (_messageLock)
             _messages.Clear();
         _current.Title = "";
@@ -593,41 +650,93 @@ public sealed class AiChatService
             return;
         }
 
-        if (IsBusy)
+        var message = new AiChatMessage
         {
-            AddMessage(new AiChatMessage
-            {
-                Role = AiRole.Assistant,
-                Content = "上一个请求还在处理中，请稍候或先取消。",
-                IsError = true
-            });
-            return;
-        }
+            Role = AiRole.User,
+            Content = text,
+            IsQueued = IsBusy
+        };
+        if (attachments is { Count: > 0 })
+            message.Attachments.AddRange(attachments);
 
-        await _gate.WaitAsync();
+        lock (_queueLock)
+            _pendingSends.Enqueue(message);
+
+        AddMessage(message);
+        UpdateConversationTitle(
+            text.Length > 0
+                ? text
+                : message.Attachments.FirstOrDefault()?.Name ?? "");
+        SaveConversations();
+        QueueChanged?.Invoke();
+
+        await PumpQueueAsync();
+    }
+
+    /// <summary>
+    /// 单消费者发送队列：同一时间只跑一轮回复，用户在当前回复期间输入的消息
+    /// 会按顺序排队，当前回复（含工具调用）结束后自动继续发送，不会打断。
+    /// </summary>
+    private async Task PumpQueueAsync()
+    {
+        if (Interlocked.CompareExchange(ref _pumping, 1, 0) != 0)
+            return;
+
         try
         {
+            await _gate.WaitAsync();
             IsBusy = true;
             BusyChanged?.Invoke(true);
-            LastError = null;
-
-            using var cts = new CancellationTokenSource();
-            _cts = cts;
-
-            await AutoCompressIfNeededAsync(cts.Token);
-
-            var userMessage = new AiChatMessage
+            try
             {
-                Role = AiRole.User,
-                Content = text
-            };
-            if (attachments is { Count: > 0 })
-                userMessage.Attachments.AddRange(attachments);
-            AddMessage(userMessage);
-            UpdateConversationTitle(
-                text.Length > 0
-                    ? text
-                    : attachments?.FirstOrDefault()?.Name ?? "");
+                while (true)
+                {
+                    AiChatMessage? next;
+                    lock (_queueLock)
+                        next = _pendingSends.Count > 0 ? _pendingSends.Dequeue() : null;
+                    if (next is null)
+                        break;
+
+                    if (next.IsQueued)
+                    {
+                        next.IsQueued = false;
+                        MessageUpdated?.Invoke(next);
+                        QueueChanged?.Invoke();
+                    }
+
+                    await RunTurnAsync(next);
+                }
+            }
+            finally
+            {
+                IsBusy = false;
+                _cts = null;
+                StatusChanged?.Invoke(null);
+                BusyChanged?.Invoke(false);
+                SaveConversations();
+                ContextUsageChanged?.Invoke();
+                _gate.Release();
+            }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _pumping, 0);
+            // 兜底：收尾瞬间入队的消息可能没被循环取到，这里再拉起一次。
+            if (QueuedCount > 0)
+                _ = PumpQueueAsync();
+        }
+    }
+
+    /// <summary>执行一轮完整的模型请求与工具循环。</summary>
+    private async Task RunTurnAsync(AiChatMessage userMessage)
+    {
+        LastError = null;
+        using var cts = new CancellationTokenSource();
+        _cts = cts;
+
+        try
+        {
+            await AutoCompressIfNeededAsync(cts.Token);
             TrimHistory();
 
             // 整个工具循环放到线程池，避免文件扫描、日志读取等操作阻塞 UI 线程。
@@ -655,13 +764,8 @@ public sealed class AiChatService
         }
         finally
         {
-            _cts = null;
-            IsBusy = false;
-            StatusChanged?.Invoke(null);
-            BusyChanged?.Invoke(false);
             SaveConversations();
             ContextUsageChanged?.Invoke();
-            _gate.Release();
         }
     }
 
@@ -720,11 +824,39 @@ public sealed class AiChatService
                 StatusChanged?.Invoke($"正在执行 {DescribeTool(call.Name)}…");
                 string result;
                 var toolTimeout = AiTools.GetToolTimeout(call);
+                using var toolCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                toolCts.CancelAfter(toolTimeout);
                 AiTools.ProgressReporter = status => StatusChanged?.Invoke(status);
                 try
                 {
-                    result = await AiTools.ExecuteAsync(call, ct)
-                        .WaitAsync(toolTimeout, ct);
+                    var startedAt = DateTime.UtcNow;
+                    var execution = AiTools.ExecuteAsync(call, toolCts.Token);
+                    while (!execution.IsCompleted)
+                    {
+                        var remaining = toolTimeout - (DateTime.UtcNow - startedAt);
+                        if (remaining <= TimeSpan.Zero)
+                            throw new TimeoutException();
+
+                        var slice = remaining < TimeSpan.FromSeconds(3)
+                            ? remaining
+                            : TimeSpan.FromSeconds(3);
+                        var finished = await Task.WhenAny(
+                            execution,
+                            Task.Delay(slice, toolCts.Token));
+                        if (ReferenceEquals(finished, execution))
+                            break;
+
+                        var elapsed = (DateTime.UtcNow - startedAt).TotalSeconds;
+                        StatusChanged?.Invoke(
+                            $"正在执行 {DescribeTool(call.Name)}… {elapsed:0} 秒");
+                    }
+
+                    result = await execution;
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // 工具自身的超时 CTS 到点，不是用户取消：交给模型自行换方案。
+                    result = $"工具执行超时（{toolTimeout.TotalSeconds:0} 秒），已跳过。";
                 }
                 catch (TimeoutException)
                 {
@@ -952,6 +1084,8 @@ public sealed class AiChatService
             var message = history[index];
             if (message.IsError)
                 continue;
+            if (message.IsQueued)
+                continue;
             if (message.Role == AiRole.System && !message.IsHidden)
                 continue;
 
@@ -1104,8 +1238,14 @@ public sealed class AiChatService
         if (ids.Count == 0)
             return true;
 
-        for (var i = index + 1; i < history.Count && history[i].Role == AiRole.Tool; i++)
+        for (var i = index + 1; i < history.Count; i++)
+        {
+            if (history[i].IsQueued)
+                continue;
+            if (history[i].Role != AiRole.Tool)
+                break;
             ids.Remove(history[i].ToolCallId ?? "");
+        }
         return ids.Count == 0;
     }
 

@@ -107,6 +107,8 @@
     <sys:String x:Key="Launch.Ai.Compress">Compress context</sys:String>
     <sys:String x:Key="Launch.Ai.Compressed">Context compressed; continuing from the summary.</sys:String>
     <sys:String x:Key="Launch.Ai.Compress.Busy">A reply is in progress; try compressing later.</sys:String>
+    <sys:String x:Key="Launch.Ai.Queued">⏳ 待機中 — 現在の返信が終わったら自動送信します</sys:String>
+    <sys:String x:Key="Launch.Ai.Busy.Wait">現在返信を処理中です。終了を待つか、停止してから操作してください。</sys:String>
     <sys:String x:Key="Launch.Ai.Compress.TooShort">This conversation is too short to compress.</sys:String>
     <sys:String x:Key="Setup.Ai.ModelList">Model list</sys:String>
     <sys:String x:Key="Setup.Ai.FetchModels">Fetch models</sys:String>
