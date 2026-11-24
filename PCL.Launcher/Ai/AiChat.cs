@@ -1297,6 +1297,7 @@ public sealed class AiChatService
         builder.AppendLine("7. 需要看文件时先调用 list_files，再 read_file；只能访问工作目录或允许访问的文件夹，路径越界会被拒绝。");
         builder.AppendLine("8. download_minecraft 与 launch_game 默认 wait=true，会等到安装或启动完成后再返回结果；拿到结果后直接继续下一步，不需要轮询 get_install_status。");
         builder.AppendLine("9. 用户消息里带“已复制到工作区”的附件时，直接用 read_file（大文件配合 max_chars 分段）或 search_files 读取路径，不要要求用户重新上传。");
+        builder.AppendLine("10. 你可以在工作目录、启动器数据目录（PCL/）或允许访问的文件夹内用 write_file、replace_in_file、create_directory、move_path、delete_path 创建和修改文件。执行覆盖、移动或删除前先确认目标路径；不要删除或覆盖 conversations.json、config.v1.yml、日志等启动器运行文件，除非用户明确要求。");
         builder.AppendLine();
         builder.AppendLine("当前启动器环境：");
         builder.AppendLine(minecraft);

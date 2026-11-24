@@ -505,6 +505,12 @@
     <sys:String x:Key="Minecraft.Launch.Login.Microsoft.AppNotApproved.Open">Open review page</sys:String>
     <sys:String x:Key="Setup.Update.Source.GitHub">Update source: GitHub · aodianjun/PCL-CE-AI</sys:String>
     <sys:String x:Key="Setup.Update.NoRelease">No releases on GitHub yet; this is a local build.</sys:String>
+    <sys:String x:Key="Update.Ai.Available.Title">Nouvelle version {0} disponible</sys:String>
+    <sys:String x:Key="Update.Ai.Available.Content">Version actuelle {0}, dernière version {1}.
+La mise à jour va télécharger le paquet, remplacer ce lanceur et redémarrer automatiquement. Continuer ?</sys:String>
+    <sys:String x:Key="Update.Ai.Downloading">Téléchargement de la mise à jour {0}…</sys:String>
+    <sys:String x:Key="Update.Ai.Failed">Échec de la mise à jour : {0}</sys:String>
+    <sys:String x:Key="Update.Ai.NoAsset">Aucun paquet ne correspond à cette installation. Téléchargez-le depuis la page Releases.</sys:String>
     <sys:String x:Key="Setup.About.Maintainer.Title">PCL CE-AI Maintainer</sys:String>
     <sys:String x:Key="Setup.About.Maintainer.Name">aodianjun</sys:String>
     <sys:String x:Key="Setup.About.Maintainer.Info">Maintainer and author of this build</sys:String>

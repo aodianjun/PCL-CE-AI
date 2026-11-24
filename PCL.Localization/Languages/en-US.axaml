@@ -3280,6 +3280,12 @@
     <sys:String x:Key="Setup.Update.Flatpak">Update through Flatpak or software center</sys:String>
     <sys:String x:Key="Setup.Update.OpenDownload">Open download page</sys:String>
     <sys:String x:Key="Setup.Update.Latest">Already up to date</sys:String>
+    <sys:String x:Key="Update.Ai.Available.Title">New version {0} available</sys:String>
+    <sys:String x:Key="Update.Ai.Available.Content">Current version {0}, latest version {1}.
+The updater will download the package, replace this launcher, and restart automatically. Continue?</sys:String>
+    <sys:String x:Key="Update.Ai.Downloading">Downloading update {0}…</sys:String>
+    <sys:String x:Key="Update.Ai.Failed">Update failed: {0}</sys:String>
+    <sys:String x:Key="Update.Ai.NoAsset">No update package matches this installation. Please download it manually from the Releases page.</sys:String>
     <sys:String x:Key="Setup.Update.MirrorChyanCdk.Get">Get CDK</sys:String>
     <sys:String x:Key="Setup.Update.MirrorChyanCdk.Label">MirrorChyan CDK</sys:String>
     <sys:String x:Key="Setup.Update.MirrorChyanCdk.ToolTip">MirrorChyan (mirrorchyan.com) is a paid third-party application distribution platform that provides high-speed download sources in China.&#xA;This is an optional service. Leaving the CDK blank does not affect normal use or updates.&#xA;If you have a MirrorChyan CDK, you can provide it to PCL CE-AI, and the launcher will prioritize its high-speed download source for software updates. This can also help reduce pressure on the community update server...</sys:String>

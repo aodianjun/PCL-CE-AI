@@ -201,6 +201,55 @@ public static class AiTools
                     ["path"] = Str("可选，要打开的目录；留空表示工作目录")
                 }),
             Tool(
+                "write_file",
+                "在工作目录或允许文件夹内创建或覆盖文本文件。适合写配置、脚本、说明文档。",
+                new JsonObject
+                {
+                    ["path"] = Str("相对工作目录的路径或允许范围内的绝对路径"),
+                    ["content"] = Str("要写入的完整文本内容，最多 2 MB"),
+                    ["overwrite"] = Bool("文件已存在时是否覆盖，默认 true"),
+                    ["create_dirs"] = Bool("上级目录不存在时是否自动创建，默认 true")
+                },
+                Required("path", "content")),
+            Tool(
+                "replace_in_file",
+                "在文本文件中精确替换一段内容，适合局部修改而不是整文件重写。",
+                new JsonObject
+                {
+                    ["path"] = Str("要修改的文件路径"),
+                    ["old_text"] = Str("要被替换的原文，必须与文件中完全一致"),
+                    ["new_text"] = Str("替换后的文本；留空表示删除这段内容"),
+                    ["replace_all"] = Bool("有多处匹配时是否全部替换，默认 false")
+                },
+                Required("path", "old_text")),
+            Tool(
+                "create_directory",
+                "在工作目录或允许文件夹内创建目录（含多级父目录）。",
+                new JsonObject
+                {
+                    ["path"] = Str("要创建的目录路径")
+                },
+                Required("path")),
+            Tool(
+                "move_path",
+                "在工作目录或允许文件夹内移动/重命名文件或目录。",
+                new JsonObject
+                {
+                    ["source"] = Str("源文件或目录路径"),
+                    ["destination"] = Str("目标路径"),
+                    ["overwrite"] = Bool("目标是已存在的文件时是否覆盖，默认 false")
+                },
+                Required("source", "destination")),
+            Tool(
+                "delete_path",
+                "永久删除工作目录或允许文件夹内的文件或目录。只能删除用户明确要求删除的内容。",
+                new JsonObject
+                {
+                    ["path"] = Str("要删除的文件或目录路径"),
+                    ["recursive"] = Bool("删除目录时是否连同内容一起删除，默认 false")
+                },
+                Required("path")),
+            Tool(
                 "download_minecraft",
                 "下载并安装 Minecraft 版本。支持原版和 Fabric；Forge/NeoForge 请引导用户用安装页。安装会在后台进行。",
                 new JsonObject
@@ -308,6 +357,24 @@ public static class AiTools
                     GetString(args, "query"),
                     GetString(args, "path")),
                 "open_folder" => OpenFolder(GetString(args, "path")),
+                "write_file" => WriteTextFile(
+                    GetString(args, "path"),
+                    GetString(args, "content"),
+                    GetBool(args, "overwrite", true),
+                    GetBool(args, "create_dirs", true)),
+                "replace_in_file" => ReplaceInFile(
+                    GetString(args, "path"),
+                    GetString(args, "old_text"),
+                    GetString(args, "new_text"),
+                    GetBool(args, "replace_all")),
+                "create_directory" => CreateDirectoryTool(GetString(args, "path")),
+                "move_path" => MovePath(
+                    GetString(args, "source"),
+                    GetString(args, "destination"),
+                    GetBool(args, "overwrite")),
+                "delete_path" => DeletePath(
+                    GetString(args, "path"),
+                    GetBool(args, "recursive")),
                 "download_minecraft" => await DownloadMinecraftAsync(
                     GetString(args, "version"),
                     GetString(args, "loader"),
@@ -404,11 +471,11 @@ public static class AiTools
         return args[key]?.ToString();
     }
 
-    private static bool GetBool(JsonObject args, string key)
+    private static bool GetBool(JsonObject args, string key, bool fallback = false)
     {
         var node = args[key];
         if (node is null)
-            return false;
+            return fallback;
         if (node.GetValueKind() == System.Text.Json.JsonValueKind.True)
             return true;
         if (node.GetValueKind() == System.Text.Json.JsonValueKind.False)
@@ -984,10 +1051,88 @@ public static class AiTools
                      .Split([';', '|'], StringSplitOptions.RemoveEmptyEntries))
             Add(item);
 
+        // 启动器自己的数据目录（PCL/）默认允许访问。
+        Add(Paths.Data);
+
         // 当前 Minecraft 目录与实例目录默认允许访问，方便读写配置和日志。
         Add(LauncherPaths.MinecraftFolder);
         Add(InstanceList.McMcInstanceSelected?.PathInstance);
         return roots;
+    }
+
+    /// <summary>允许写入的根目录：工作目录、默认 AI 工作区、用户显式允许的文件夹。
+    /// Minecraft 目录与实例目录只允许读取，避免 AI 误删游戏文件。</summary>
+    private static IReadOnlyList<string> GetWritableRoots()
+    {
+        var roots = new List<string>();
+        void Add(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+            try
+            {
+                var full = Path.GetFullPath(value.Trim()).TrimEnd(
+                    Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar);
+                if (full.Length > 0 && !roots.Contains(full, StringComparer.OrdinalIgnoreCase))
+                    roots.Add(full);
+            }
+            catch (Exception)
+            {
+                // 忽略非法路径。
+            }
+        }
+
+        Add(Config.Ai.WorkDirectory);
+        Add(AiChatService.GetWorkspaceDirectory());
+        foreach (var item in (Config.Ai.AllowedDirectories ?? "")
+                     .Split([';', '|'], StringSplitOptions.RemoveEmptyEntries))
+            Add(item);
+
+        // 启动器自己的数据与配置目录默认允许写入。
+        Add(Paths.Data);
+        return roots;
+    }
+
+    private static string? ResolveWritablePath(string? path, out string? error)
+    {
+        error = null;
+        var roots = GetWritableRoots();
+        if (roots.Count == 0)
+        {
+            error = "还没有设置工作目录。请让用户先在“设置 → AI 接入”里选择工作目录。";
+            return null;
+        }
+
+        var baseRoot = roots[0];
+        string candidate;
+        try
+        {
+            candidate = string.IsNullOrWhiteSpace(path)
+                ? baseRoot
+                : Path.IsPathRooted(path)
+                    ? Path.GetFullPath(path)
+                    : Path.GetFullPath(Path.Combine(baseRoot, path));
+        }
+        catch (Exception ex)
+        {
+            error = "路径无效：" + ex.Message;
+            return null;
+        }
+
+        candidate = candidate.TrimEnd(
+            Path.DirectorySeparatorChar,
+            Path.AltDirectorySeparatorChar);
+        foreach (var root in roots)
+        {
+            if (candidate.Equals(root, StringComparison.OrdinalIgnoreCase)
+                || candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                || candidate.StartsWith(root + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return candidate;
+        }
+
+        error = "拒绝访问：只能修改工作目录或允许访问的文件夹内的文件。";
+        return null;
     }
 
     private static string? ResolveAllowedPath(string? path, out string? error)
@@ -1144,6 +1289,256 @@ public static class AiTools
         {
             return "搜索失败：" + ex.Message;
         }
+    }
+
+    private const int MaxWritableFileBytes = 2 * 1024 * 1024;
+
+    private static string WriteTextFile(
+        string? path,
+        string? content,
+        bool overwrite,
+        bool createDirs)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return "缺少参数 path。";
+        var file = ResolveWritablePath(path, out var error);
+        if (file is null)
+            return error ?? "无法访问该路径。";
+        if (Directory.Exists(file))
+            return "目标是目录，不能写入文件：" + file;
+
+        content ??= "";
+        var bytes = Encoding.UTF8.GetByteCount(content);
+        if (bytes > MaxWritableFileBytes)
+            return $"内容超过 2 MB（{bytes} 字节），拒绝写入。";
+
+        var existed = File.Exists(file);
+        if (existed && !overwrite)
+            return $"文件已存在：{file}。如需覆盖请把 overwrite 设为 true。";
+
+        try
+        {
+            var parent = Path.GetDirectoryName(file);
+            if (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
+            {
+                if (!createDirs)
+                    return "上级目录不存在：" + parent;
+                Directory.CreateDirectory(parent);
+            }
+
+            File.WriteAllText(file, content, new UTF8Encoding(false));
+            return new JsonObject
+            {
+                ["path"] = file,
+                ["bytes"] = bytes,
+                ["created"] = !existed
+            }.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            return "写入文件失败：" + ex.Message;
+        }
+    }
+
+    private static string ReplaceInFile(
+        string? path,
+        string? oldText,
+        string? newText,
+        bool replaceAll)
+    {
+        if (string.IsNullOrEmpty(oldText))
+            return "缺少参数 old_text（不能为空）。";
+        var file = ResolveWritablePath(path, out var error);
+        if (file is null)
+            return error ?? "无法访问该路径。";
+        if (!File.Exists(file))
+            return "文件不存在：" + file;
+
+        try
+        {
+            var info = new FileInfo(file);
+            if (info.Length > MaxWritableFileBytes)
+                return "文件超过 2 MB，拒绝修改。";
+
+            var text = File.ReadAllText(file);
+            var count = CountOccurrences(text, oldText);
+            if (count == 0)
+                return "没有找到要替换的原文，请先用 read_file 确认内容。";
+            if (count > 1 && !replaceAll)
+                return $"找到 {count} 处匹配，请提供更多上下文，或把 replace_all 设为 true。";
+
+            newText ??= "";
+            var updated = replaceAll
+                ? text.Replace(oldText, newText, StringComparison.Ordinal)
+                : ReplaceFirst(text, oldText, newText);
+            var bytes = Encoding.UTF8.GetByteCount(updated);
+            if (bytes > MaxWritableFileBytes)
+                return $"替换后超过 2 MB（{bytes} 字节），拒绝写入。";
+
+            File.WriteAllText(file, updated, new UTF8Encoding(false));
+            return new JsonObject
+            {
+                ["path"] = file,
+                ["replaced"] = replaceAll ? count : 1,
+                ["bytes"] = bytes
+            }.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            return "修改文件失败：" + ex.Message;
+        }
+    }
+
+    private static string CreateDirectoryTool(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return "缺少参数 path。";
+        var directory = ResolveWritablePath(path, out var error);
+        if (directory is null)
+            return error ?? "无法访问该路径。";
+        if (File.Exists(directory))
+            return "同名文件已存在：" + directory;
+
+        try
+        {
+            var existed = Directory.Exists(directory);
+            Directory.CreateDirectory(directory);
+            return new JsonObject
+            {
+                ["path"] = directory,
+                ["created"] = !existed
+            }.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            return "创建目录失败：" + ex.Message;
+        }
+    }
+
+    private static string MovePath(string? source, string? destination, bool overwrite)
+    {
+        if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(destination))
+            return "缺少参数 source 或 destination。";
+        var src = ResolveWritablePath(source, out var error);
+        if (src is null)
+            return error ?? "无法访问源路径。";
+        var dst = ResolveWritablePath(destination, out error);
+        if (dst is null)
+            return error ?? "无法访问目标路径。";
+        if (string.Equals(src, dst, StringComparison.OrdinalIgnoreCase))
+            return "源路径和目标路径相同。";
+
+        try
+        {
+            if (Directory.Exists(src))
+            {
+                if (dst.StartsWith(src + Path.DirectorySeparatorChar,
+                        StringComparison.OrdinalIgnoreCase))
+                    return "不能把目录移动到它自己的子目录。";
+                if (Directory.Exists(dst) || File.Exists(dst))
+                    return "目标已存在：" + dst;
+
+                var parent = Path.GetDirectoryName(dst);
+                if (!string.IsNullOrEmpty(parent))
+                    Directory.CreateDirectory(parent);
+                Directory.Move(src, dst);
+            }
+            else if (File.Exists(src))
+            {
+                if (Directory.Exists(dst))
+                    return "目标是一个目录：" + dst;
+
+                var parent = Path.GetDirectoryName(dst);
+                if (!string.IsNullOrEmpty(parent))
+                    Directory.CreateDirectory(parent);
+                File.Move(src, dst, overwrite);
+            }
+            else
+            {
+                return "源路径不存在：" + src;
+            }
+
+            return new JsonObject
+            {
+                ["source"] = src,
+                ["destination"] = dst
+            }.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            return "移动失败：" + ex.Message;
+        }
+    }
+
+    private static string DeletePath(string? path, bool recursive)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return "缺少参数 path。";
+        var target = ResolveWritablePath(path, out var error);
+        if (target is null)
+            return error ?? "无法访问该路径。";
+
+        var roots = GetWritableRoots();
+        if (roots.Any(root => string.Equals(target, root, StringComparison.OrdinalIgnoreCase)))
+            return "拒绝删除工作目录或允许文件夹的根目录。";
+
+        try
+        {
+            if (File.Exists(target))
+            {
+                File.Delete(target);
+                return new JsonObject
+                {
+                    ["deleted"] = target,
+                    ["type"] = "file"
+                }.ToJsonString();
+            }
+
+            if (Directory.Exists(target))
+            {
+                if (!recursive)
+                    return "目标是目录；如需连同内容一起删除，请把 recursive 设为 true。";
+                if (roots.Any(root => root.StartsWith(
+                        target + Path.DirectorySeparatorChar,
+                        StringComparison.OrdinalIgnoreCase)))
+                    return "该目录包含其它允许访问的目录，拒绝删除：" + target;
+
+                Directory.Delete(target, true);
+                return new JsonObject
+                {
+                    ["deleted"] = target,
+                    ["type"] = "directory"
+                }.ToJsonString();
+            }
+
+            return "路径不存在：" + target;
+        }
+        catch (Exception ex)
+        {
+            return "删除失败：" + ex.Message;
+        }
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while (true)
+        {
+            index = text.IndexOf(value, index, StringComparison.Ordinal);
+            if (index < 0)
+                return count;
+            count++;
+            index += value.Length;
+        }
+    }
+
+    private static string ReplaceFirst(string text, string oldValue, string newValue)
+    {
+        var index = text.IndexOf(oldValue, StringComparison.Ordinal);
+        return index < 0
+            ? text
+            : text[..index] + newValue + text[(index + oldValue.Length)..];
     }
 
     private static string OpenFolder(string? path)

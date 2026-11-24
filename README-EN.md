@@ -33,6 +33,8 @@ PCL CE-AI lets the AI assistant drive the launcher: ask it to "launch the game",
 - **Settings consolidation**: downloads, mods, modpacks, resource packs, shaders, worlds, datapacks, instance settings, logs, tasks and tools all live under Settings.
 - **Microsoft sign-in**: the Azure client ID is embedded at build time, so every device running the build can sign in directly (the client ID passed Mojang AppID review on 2026-11-24).
 - **Third-party login**: authlib-injector and offline profiles no longer require a Microsoft profile first, including in Release builds.
+- **AI file operations**: create, write, replace, move and delete files inside the workspace, launcher data folder and allowed directories; destructive actions confirm the path first.
+- **Self-update**: checks this repository's Releases after startup; one confirmation downloads, replaces and restarts the launcher.
 - **GitHub Releases updates**: no longer uses the official update source, so the build cannot be replaced by upstream releases.
 
 ## Conversations and context

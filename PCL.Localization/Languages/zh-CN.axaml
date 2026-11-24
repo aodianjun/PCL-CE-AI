@@ -3280,6 +3280,12 @@
     <sys:String x:Key="Setup.Update.Flatpak">请通过 Flatpak 或软件中心更新</sys:String>
     <sys:String x:Key="Setup.Update.OpenDownload">打开下载页</sys:String>
     <sys:String x:Key="Setup.Update.Latest">已是最新版本</sys:String>
+    <sys:String x:Key="Update.Ai.Available.Title">发现新版本 {0}</sys:String>
+    <sys:String x:Key="Update.Ai.Available.Content">当前版本 {0}，最新版本 {1}。
+更新会下载安装包并覆盖当前启动器，然后自动重启。是否继续？</sys:String>
+    <sys:String x:Key="Update.Ai.Downloading">正在下载更新 {0}…</sys:String>
+    <sys:String x:Key="Update.Ai.Failed">更新失败：{0}</sys:String>
+    <sys:String x:Key="Update.Ai.NoAsset">最新版本没有找到适用于当前安装方式的更新包，请到 Releases 页手动下载。</sys:String>
     <sys:String x:Key="Setup.Update.MirrorChyanCdk.Get">获取 CDK</sys:String>
     <sys:String x:Key="Setup.Update.MirrorChyanCdk.Label">Mirror 酱 CDK</sys:String>
     <sys:String x:Key="Setup.Update.MirrorChyanCdk.ToolTip">Mirror 酱 (mirrorchyan.com) 是一个付费的第三方应用分发平台，用于提供国内有偿高速下载源。&#xA;这是一项可选服务，不填入 CDK 不影响正常使用与更新。&#xA;如果你有 Mirror 酱的 CDK，可以提供给 PCL CE-AI，启动器会优先使用他们的高速下载源下载软件更新，也能缓解社区公益更新服务器的一些压力……</sys:String>

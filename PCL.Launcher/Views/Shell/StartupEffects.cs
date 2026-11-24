@@ -50,6 +50,7 @@ public sealed class StartupEffects(
         }
 
         Basics.RunInNewThread(ShowStartupDialogs, "StartupDialogs");
+        AiSelfUpdater.ScheduleStartupCheck();
     }
 
     private void ApplyWindowOpacity()

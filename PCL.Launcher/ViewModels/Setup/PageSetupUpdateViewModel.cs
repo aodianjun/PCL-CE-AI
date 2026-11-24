@@ -8,6 +8,7 @@ using PCL.Core.Utils;
 using PCL.Core.Utils.OS;
 using PCL.Core.ViewModel;
 using PCL.Text;
+using PCL.UI;
 
 namespace PCL;
 
@@ -163,7 +164,7 @@ public partial class PageSetupUpdateViewModel : ViewModelBase
             UpdateNameText = "PCL CE-AI " + VersionNameFormat(tag);
             _changelogSummary = BuildGithubSummary(body);
             OnPropertyChanged(nameof(ChangelogText));
-            SetExternalUpdateButtonText("Setup.Update.OpenDownload");
+            SetUpdateButtonState(UpdateButtonState.Install);
             UpdateButtonEnabled = true;
             ShowUpdateCard = true;
             ShowCheckCard = false;
@@ -214,7 +215,7 @@ public partial class PageSetupUpdateViewModel : ViewModelBase
 
         if (!string.IsNullOrEmpty(_releaseUrl))
         {
-            Basics.OpenPath(_releaseUrl);
+            await AiSelfUpdater.RunManualUpdateAsync();
             return;
         }
 

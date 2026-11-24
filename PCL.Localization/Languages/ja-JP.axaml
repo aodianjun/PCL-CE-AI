@@ -95,6 +95,12 @@
     <sys:String x:Key="Minecraft.Launch.Login.Microsoft.AppNotApproved.Open">Open review page</sys:String>
     <sys:String x:Key="Setup.Update.Source.GitHub">Update source: GitHub · aodianjun/PCL-CE-AI</sys:String>
     <sys:String x:Key="Setup.Update.NoRelease">No releases on GitHub yet; this is a local build.</sys:String>
+    <sys:String x:Key="Update.Ai.Available.Title">新しいバージョン {0} があります</sys:String>
+    <sys:String x:Key="Update.Ai.Available.Content">現在のバージョン {0}、最新バージョン {1}。
+更新をダウンロードして現在のランチャーを置き換え、自動的に再起動します。続行しますか？</sys:String>
+    <sys:String x:Key="Update.Ai.Downloading">更新 {0} をダウンロードしています…</sys:String>
+    <sys:String x:Key="Update.Ai.Failed">更新に失敗しました：{0}</sys:String>
+    <sys:String x:Key="Update.Ai.NoAsset">このインストール方法に合う更新パッケージがありません。Releases ページから手動でダウンロードしてください。</sys:String>
     <sys:String x:Key="Setup.About.Maintainer.Title">PCL CE-AI Maintainer</sys:String>
     <sys:String x:Key="Setup.About.Maintainer.Name">aodianjun</sys:String>
     <sys:String x:Key="Setup.About.Maintainer.Info">Maintainer and author of this build</sys:String>
