@@ -4,14 +4,16 @@ using PCL.Navigation;
 namespace PCL.Views.Pages.Launch;
 
 /// <summary>
-/// 启动页宿主：右栏是 AI 对话主界面。
-/// 原左栏（<see cref="PageLaunchLeft" />）仍然由组合根创建，但不再挂载到窗口左侧，
-/// 而是作为账号/启动状态控制器被右栏收进账号抽屉。
+/// 启动页宿主：同一块内容区在“主页内容”和“AI 对话”之间切换。
+/// 左栏（<see cref="PageLaunchLeft" />）仍由组合根创建，但只作为账号/启动状态控制器。
 /// </summary>
 public sealed class PageLaunchHost(
     PageLaunchLeft left,
-    PageLaunchRight right) : IPageHost
+    PageLaunchRight right,
+    PageLaunchAi ai) : IPageHost
 {
+    private readonly PageLaunchWorkspace _workspace = new(ai, right);
+
     /// <summary>未被挂载的左栏控制器，仅供需要访问启动状态的地方使用。</summary>
     public PageLaunchLeft Left { get; } = left;
 
@@ -33,6 +35,6 @@ public sealed class PageLaunchHost(
 
     public Control GetRight(PageRoute stack)
     {
-        return right;
+        return _workspace;
     }
 }

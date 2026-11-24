@@ -3709,6 +3709,8 @@
 
     <sys:String x:Key="Common.Action.Save">儲存</sys:String>
     <sys:String x:Key="Launch.Ai.Title">AI 助理</sys:String>
+    <sys:String x:Key="Launch.Ai.OpenAi">AI 對話</sys:String>
+    <sys:String x:Key="Launch.Ai.ShowHome">顯示首頁</sys:String>
     <sys:String x:Key="Launch.Ai.Input.Hint">告訴 AI 你想做什麼，例如「啟動遊戲」「下載 1.21.1」「關掉不相容的 Mod」…</sys:String>
     <sys:String x:Key="Launch.Ai.Send">傳送</sys:String>
     <sys:String x:Key="Launch.Ai.Cancel">取消目前回覆</sys:String>

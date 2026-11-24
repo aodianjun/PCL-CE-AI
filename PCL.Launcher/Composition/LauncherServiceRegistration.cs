@@ -64,6 +64,7 @@ public static class LauncherServiceRegistration
         // Host 的构造依赖。页面本身由 PageViewFactory 创建，不需要逐个注册。
         services.AddTransient<PageLaunchLeft>();
         services.AddTransient<PageLaunchRight>();
+        services.AddTransient<PageLaunchAi>();
         services.AddTransient<PageDownloadLeft>();
         services.AddTransient<PageSetupLeft>();
         services.AddTransient<PageToolsLeft>();

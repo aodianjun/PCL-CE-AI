@@ -3718,6 +3718,8 @@
 
     <sys:String x:Key="Common.Action.Save">保存</sys:String>
     <sys:String x:Key="Launch.Ai.Title">AI 助手</sys:String>
+    <sys:String x:Key="Launch.Ai.OpenAi">AI 对话</sys:String>
+    <sys:String x:Key="Launch.Ai.ShowHome">显示主页</sys:String>
     <sys:String x:Key="Launch.Ai.Input.Hint">告诉 AI 你想做什么，例如“启动游戏”“下载 1.21.1”“关掉不兼容的 Mod”…</sys:String>
     <sys:String x:Key="Launch.Ai.Send">发送</sys:String>
     <sys:String x:Key="Launch.Ai.Cancel">取消当前回复</sys:String>

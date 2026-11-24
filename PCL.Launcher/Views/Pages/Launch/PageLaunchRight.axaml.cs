@@ -1,139 +1,108 @@
-using System.ComponentModel;
+using System.Globalization;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
-using Avalonia.Input.Platform;
-using Avalonia.Interactivity;
-using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
 using Avalonia.Threading;
-using PCL.Ai;
 using PCL.Core.App;
 using PCL.Core.App.Localization;
 using PCL.Core.Logging;
-using PCL.Core.Minecraft.Profile;
-using PCL.Core.UI;
 using PCL.Core.UI.Dialogs;
 using PCL.Core.UI.Hints;
 using PCL.Navigation;
 using PCL.UI.Controls;
+using PCL.UI.Xaml;
+using PCL.Views.Pages.Homepage;
+using PCL.Views.Shell;
+using PCL.Xaml;
 
 namespace PCL.Views.Pages.Launch;
 
 /// <summary>
-/// 启动页右栏：以 AI 对话为主界面，底部只保留左下角设置、账号、版本选择与启动按钮。
-/// 原启动页左栏的实例/账号控制器仍然存在，但被收进账号抽屉，由本页面统一驱动。
+/// 启动页右栏：按 <c>Preference.Homepage</c> 配置构建主页内容，另带社区版提示与启动日志卡片。
+/// 主页来源分为空白、内置“你知道吗”、Minecraft 信息流与运行时 XAML 主页四类； 运行时内容支持旧 WPF XAML 与 AXAML
+/// 两种格式，统一走预设、本地文件、URL、 缓存与 CustomLive.json 实时补丁流程。
 /// </summary>
 public partial class PageLaunchRight : MyPageRight, IRefreshable
 {
-    private static bool _onboardingShownThisRun;
+    private const string HomepageLivePatchFileName = "CustomLive.json";
+    private const string HomepageLiveSupportFileName = "CustomLive.supported.json";
 
-    private readonly Dictionary<AiChatMessage, BubbleView> _bubbles = [];
-    private readonly List<string> _launchLogBuffer = [];
+    private static readonly Dictionary<string, string> HomepageLiveAllowedProperties =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["text"] = "Text",
+            ["title"] = "Title",
+            ["info"] = "Info",
+            ["tooltip"] = "ToolTip",
+            ["visibility"] = "Visibility",
+            ["isEnabled"] = "IsEnabled",
+            ["opacity"] = "Opacity"
+        };
 
-    private readonly Panel _panInput;
-    private readonly Panel _panLaunching;
-    private readonly MyScrollViewer _sclChat;
-    private readonly StackPanel _panMessages;
-    private readonly MyTextBox _txtInput;
-    private readonly MyButton _btnLaunch;
-    private readonly MyButton _btnAccount;
-    private readonly MyButton _btnVersion;
-    private readonly MyIconButton _btnSend;
-    private readonly MyIconButton _btnCancelReply;
-    private readonly TextBlock _labModel;
-    private readonly TextBlock _labContextUsage;
-    private readonly StackPanel _panThinking;
-    private readonly DispatcherTimer _thinkingTimer;
-    private readonly RotateTransform[] _thinkingRotates = [new(), new(), new()];
-    private readonly double[] _thinkingAngles = [0d, 0d, 0d];
-    private readonly TextBlock _labLaunchingStage;
-    private readonly ProgressBar _barLaunch;
-    private readonly Grid _panDrawerLayer;
-    private readonly ContentControl _panDrawerHost;
-    private readonly Grid _panConvLayer;
-    private readonly StackPanel _panConversations;
-    private readonly WrapPanel _panPendingAttachments;
-    private readonly List<AiAttachment> _pendingAttachments = [];
+    private readonly TextBlock _labHint1;
+    private readonly TextBlock _labHint2;
+    private readonly TextBlock _labLog;
+    private readonly PageHomepageNewsView _newsView;
+    private readonly MyScrollViewer _panBack;
+    private readonly StackPanel _panCustom;
+    private readonly MyCard _panHint;
+    private readonly MyCard _panLog;
 
-    private PageLaunchLeftViewModel? _viewModel;
-    private PageLaunchLeft? _leftPanel;
-    private bool _welcomeShown;
-    private bool _eventsAttached;
+    private bool _communityHintDialogOpen;
+
+    private DispatcherTimer? _homepageLivePatchTimer;
+    private FileSystemWatcher? _homepageLiveWatcher;
+    private bool _initialContentPending;
+    private string? _lastWpfToastSource;
+    private HomepageContent? _pendingBackgroundContent;
+    private int _refreshVersion;
 
     public PageLaunchRight()
     {
         InitializeComponent();
         Current = this;
 
-        _panInput = this.FindControl<Panel>("PanInput")!;
-        _panLaunching = this.FindControl<Panel>("PanLaunching")!;
-        _sclChat = this.FindControl<MyScrollViewer>("SclChat")!;
-        _panMessages = this.FindControl<StackPanel>("PanMessages")!;
-        _txtInput = this.FindControl<MyTextBox>("TxtInput")!;
-        _btnLaunch = this.FindControl<MyButton>("BtnLaunch")!;
-        _btnAccount = this.FindControl<MyButton>("BtnAccount")!;
-        _btnVersion = this.FindControl<MyButton>("BtnVersion")!;
-        _btnSend = this.FindControl<MyIconButton>("BtnSend")!;
-        _btnCancelReply = this.FindControl<MyIconButton>("BtnCancelReply")!;
-        _labModel = this.FindControl<TextBlock>("LabModel")!;
-        _labContextUsage = this.FindControl<TextBlock>("LabContextUsage")!;
-        _panThinking = this.FindControl<StackPanel>("PanThinking")!;
-        var thinkingImages = _panThinking.Children.OfType<Image>().ToArray();
-        for (var i = 0; i < thinkingImages.Length && i < _thinkingRotates.Length; i++)
-            thinkingImages[i].RenderTransform = _thinkingRotates[i];
+        _panBack = this.FindControl<MyScrollViewer>("PanBack")!;
+        _panCustom = this.FindControl<StackPanel>("PanCustom")!;
+        _panHint = this.FindControl<MyCard>("PanHint")!;
+        _panLog = this.FindControl<MyCard>("PanLog")!;
+        _labHint1 = this.FindControl<TextBlock>("LabHint1")!;
+        _labHint2 = this.FindControl<TextBlock>("LabHint2")!;
+        _labLog = this.FindControl<TextBlock>("LabLog")!;
+        PanScroll = _panBack;
 
-        _thinkingTimer = new DispatcherTimer
+        _newsView = new PageHomepageNewsView();
+
+        FileDragHandler.CustomHomepageDropped += _ => ForceRefresh();
+
+        _panHint.IsVisible = States.Hint.CEMessage;
+        _labHint1.SetLocalizedValue(TextBlock.TextProperty, "Launch.Right.CommunityHint.Message");
+        _labHint2.SetLocalizedValue(
+            TextBlock.TextProperty,
+            "Launch.Right.CommunityHint.HidePrompt");
+        this.FindControl<MyIconButton>("BtnHintClose")!.Click += (_, _) => HideCommunityHint();
+
+        _panLog.IsVisible = LauncherCommon.ModeDebug;
+
+        Loaded += (_, _) =>
         {
-            Interval = TimeSpan.FromMilliseconds(40)
+            LauncherCommon.ModeDebugChanged -= OnModeDebugChanged;
+            LauncherCommon.ModeDebugChanged += OnModeDebugChanged;
+            OnModeDebugChanged(LauncherCommon.ModeDebug);
+            _panBack.ScrollToHome();
+            EnsureHomepageLiveWatcher();
+            // 首次进入不主动清缓存：有缓存时先显示缓存并在后台检查新版本。
+            RefreshContent();
         };
-        _thinkingTimer.Tick += (_, _) =>
+        Unloaded += (_, _) =>
         {
-            for (var i = 0; i < _thinkingRotates.Length; i++)
-            {
-                _thinkingAngles[i] = (_thinkingAngles[i] + 9 + i * 3) % 360;
-                _thinkingRotates[i].Angle = _thinkingAngles[i];
-            }
+            LauncherCommon.ModeDebugChanged -= OnModeDebugChanged;
+            DisposeHomepageLiveWatcher();
         };
-        _labLaunchingStage = this.FindControl<TextBlock>("LabLaunchingStage")!;
-        _barLaunch = this.FindControl<ProgressBar>("BarLaunch")!;
-        _panDrawerLayer = this.FindControl<Grid>("PanDrawerLayer")!;
-        _panDrawerHost = this.FindControl<ContentControl>("PanDrawerHost")!;
-        _panConvLayer = this.FindControl<Grid>("PanConvLayer")!;
-        _panConversations = this.FindControl<StackPanel>("PanConversations")!;
-        _panPendingAttachments = this.FindControl<WrapPanel>("PanPendingAttachments")!;
-
-        _txtInput.AddHandler(
-            InputElement.KeyDownEvent,
-            Input_OnKeyDown,
-            RoutingStrategies.Tunnel);
-        PanScroll = _sclChat;
-
-        _btnLaunch.Click += Launch_OnClick;
-        _btnAccount.Click += Account_OnClick;
-        _btnVersion.Click += Version_OnClick;
-        _btnSend.Click += Send_OnClick;
-        _btnCancelReply.Click += CancelReply_OnClick;
-        this.FindControl<MyIconButton>("BtnClearChat")!.Click += ClearChat_OnClick;
-        this.FindControl<MyIconButton>("BtnNewChat")!.Click += NewChat_OnClick;
-        this.FindControl<MyIconButton>("BtnConversations")!.Click += Conversations_OnClick;
-        this.FindControl<MyIconButton>("BtnCompress")!.Click += Compress_OnClick;
-        this.FindControl<MyIconButton>("BtnNewChatInList")!.Click += NewChat_OnClick;
-        this.FindControl<MyIconButton>("BtnCloseConv")!.Click += CloseConv_OnClick;
-        this.FindControl<MyIconButton>("BtnAttachFiles")!.Click += AttachFiles_OnClick;
-        _txtInput.PastingFromClipboard += OnPastingFromClipboard;
-        this.FindControl<MyIconButton>("BtnSettings")!.Click += Settings_OnClick;
-        this.FindControl<MyButton>("BtnCancelLaunch")!.Click += CancelLaunch_OnClick;
-        this.FindControl<MyIconButton>("BtnCloseDrawer")!.Click += CloseDrawer_OnClick;
-
-        Loaded += OnLoaded;
-        Unloaded += OnUnloaded;
-
-        RefreshModelLabel(null);
-        RefreshContextUsage();
-        RenderExistingHistory();
-        UpdateSendState();
     }
 
     public static PageLaunchRight? Current { get; private set; }
@@ -141,1146 +110,836 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
     /// <inheritdoc />
     public void Refresh()
     {
-        RefreshLaunchUi();
+        ForceRefresh();
     }
 
-    /// <summary>兼容旧的启动日志追加接口：日志只写入本地日志，不再占用主界面。</summary>
     public void AppendLaunchLog(string text)
     {
-        lock (_launchLogBuffer)
-        {
-            _launchLogBuffer.Add(text);
-            if (_launchLogBuffer.Count > 500)
-                _launchLogBuffer.RemoveRange(0, _launchLogBuffer.Count - 500);
-        }
+        if (Dispatcher.UIThread.CheckAccess())
+            _labLog.Text += text;
+        else
+            Dispatcher.UIThread.Post(() => _labLog.Text += text);
+    }
+
+    private void OnModeDebugChanged(bool enabled)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+            _panLog.IsVisible = enabled;
+        else
+            Dispatcher.UIThread.Post(() => _panLog.IsVisible = enabled);
     }
 
     public void ClearLaunchLog()
     {
-        lock (_launchLogBuffer)
-        {
-            _launchLogBuffer.Clear();
-        }
+        if (Dispatcher.UIThread.CheckAccess())
+            _labLog.Text = "";
+        else
+            Dispatcher.UIThread.Post(() => _labLog.Text = "");
     }
 
-    /// <summary>兼容旧主页的强制刷新入口。</summary>
-    public void ForceRefresh()
-    {
-        RefreshLaunchUi();
-    }
-
-    /// <inheritdoc />
     public override void OnNavigatedTo(PageParameter? parameter)
     {
-        AttachLaunchController();
-        RefreshLaunchUi();
-        UpdateAccountText();
     }
 
-    /// <inheritdoc />
     public override void OnNavigatedFrom()
     {
-        CloseDrawer();
     }
 
-    private void OnLoaded(object? sender, RoutedEventArgs e)
+    public void ForceRefresh()
     {
-        if (!_eventsAttached)
-        {
-            _eventsAttached = true;
-            AiChatService.Instance.MessageAdded += OnAiMessageAdded;
-            AiChatService.Instance.MessageUpdated += OnAiMessageUpdated;
-            AiChatService.Instance.HistoryCleared += OnAiHistoryCleared;
-            AiChatService.Instance.BusyChanged += OnAiBusyChanged;
-            AiChatService.Instance.StatusChanged += OnAiStatusChanged;
-            AiChatService.Instance.ConversationsChanged += OnConversationsChanged;
-            AiChatService.Instance.ConversationSwitched += OnConversationSwitched;
-            AiChatService.Instance.ContextUsageChanged += OnContextUsageChanged;
-            PCL.Views.Shell.FileDragHandler.FileDropped += OnFileDropped;
-        }
-
-        AttachLaunchController();
-        RefreshLaunchUi();
-        UpdateAccountText();
-        SyncHistory();
-        if (!_welcomeShown)
-        {
-            _welcomeShown = true;
-            ShowWelcome();
-        }
-
-        CheckOnboarding();
+        LogWrapper.Info("Launch", "[Page] 要求强制刷新主页");
+        HomepageSource.ClearCache();
+        _panBack.ScrollToHome();
+        RefreshContent();
     }
 
-    private void OnUnloaded(object? sender, RoutedEventArgs e)
+    private void RefreshContent()
     {
-        if (_eventsAttached)
+        var version = Interlocked.Increment(ref _refreshVersion);
+        _initialContentPending = true;
+        _pendingBackgroundContent = null;
+        EnsureHomepageLiveWatcher();
+
+        Task.Run(() =>
         {
-            _eventsAttached = false;
-            AiChatService.Instance.MessageAdded -= OnAiMessageAdded;
-            AiChatService.Instance.MessageUpdated -= OnAiMessageUpdated;
-            AiChatService.Instance.HistoryCleared -= OnAiHistoryCleared;
-            AiChatService.Instance.BusyChanged -= OnAiBusyChanged;
-            AiChatService.Instance.StatusChanged -= OnAiStatusChanged;
-            AiChatService.Instance.ConversationsChanged -= OnConversationsChanged;
-            AiChatService.Instance.ConversationSwitched -= OnConversationSwitched;
-            AiChatService.Instance.ContextUsageChanged -= OnContextUsageChanged;
-            PCL.Views.Shell.FileDragHandler.FileDropped -= OnFileDropped;
-        }
-
-        if (_viewModel is not null)
-        {
-            _viewModel.PropertyChanged -= OnLaunchViewModelChanged;
-            _viewModel.RefreshPageRequested -= OnProfileRefreshRequested;
-            // 下次挂载时重新订阅，避免页面离开后丢失状态更新。
-            _viewModel = null;
-        }
-
-    }
-
-    #region 启动控制器与底部操作栏
-
-    private void AttachLaunchController()
-    {
-        try
-        {
-            var left = PageLaunchLeft.Current;
-            if (left is not null && _leftPanel is null)
+            HomepageContent content;
+            try
             {
-                // 左栏只保留账号区域，启动与实例按钮由底部操作栏接管。
-                if (left.FindControl<Grid>("PanLaunch") is { } panLaunch)
-                    panLaunch.IsVisible = false;
-                if (left.FindControl<MyButton>("BtnInstance") is { } btnInstance)
-                    btnInstance.IsVisible = false;
-                if (left.FindControl<MyButton>("BtnMore") is { } btnMore)
-                    btnMore.IsVisible = false;
-                _panDrawerHost.Content = left;
-                _leftPanel = left;
+                content = HomepageSource.Resolve(
+                    ShowHomepageLoadingHint,
+                    updated => LauncherCommon.RunInUi(() =>
+                    {
+                        if (version != Volatile.Read(ref _refreshVersion))
+                            return;
+                        ApplyBackgroundUpdate(updated);
+                    }));
+            }
+            catch (Exception ex)
+            {
+                LogWrapper.Error(ex, "Launch", "加载 PCL CE 主页自定义信息失败");
+                content = new HomepageContent
+                {
+                    Kind = HomepageSourceKind.Blank,
+                    ErrorMessage = Lang.Text("Launch.Homepage.LoadFailed.Title")
+                };
             }
 
-            if (left is not null && _viewModel is null)
+            LauncherCommon.RunInUi(() =>
             {
-                _viewModel = left.ViewModel;
-                _viewModel.PropertyChanged += OnLaunchViewModelChanged;
-                _viewModel.RefreshPageRequested += OnProfileRefreshRequested;
-            }
+                if (version != Volatile.Read(ref _refreshVersion))
+                    return;
+                _initialContentPending = false;
+                try
+                {
+                    if (content.ErrorMessage is { Length: > 0 } error)
+                    {
+                        ShowHomepageError(error);
+                        return;
+                    }
 
-            _viewModel?.InitializePage();
-        }
-        catch (Exception ex)
-        {
-            LogWrapper.Warn("UI", $"初始化启动控制器失败：{ex.Message}");
-        }
-    }
+                    if (content.IsLoading)
+                    {
+                        // 新下载没有可复用的缓存：按 WPF 行为先清空旧页。
+                        _panCustom.Children.Clear();
+                        _panHint.Margin = new Thickness(0d, 0d, 0d, 15d);
+                        return;
+                    }
 
-    private void OnLaunchViewModelChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (!Dispatcher.UIThread.CheckAccess())
-        {
-            Dispatcher.UIThread.Post(RefreshLaunchUi);
-            return;
-        }
-
-        RefreshLaunchUi();
-    }
-
-    private void OnProfileRefreshRequested()
-    {
-        Dispatcher.UIThread.Post(() =>
-        {
-            RefreshLaunchUi();
-            UpdateAccountText();
+                    LoadContent(content);
+                    _panBack.ScrollToHome();
+                }
+                finally
+                {
+                    // 极快返回的后台结果可能在初次内容落地前就到了，这里补一次。
+                    if (_pendingBackgroundContent is { } pending)
+                    {
+                        _pendingBackgroundContent = null;
+                        ApplyBackgroundUpdate(pending);
+                    }
+                }
+            });
         });
     }
 
-    private void RefreshLaunchUi()
+    private static void ShowHomepageLoadingHint()
     {
-        if (_viewModel is null)
+        HintService.Show(Hints.Info(Lang.Text("Launch.Homepage.Loading")));
+    }
+
+    private async void HideCommunityHint()
+    {
+        if (_communityHintDialogOpen)
             return;
 
+        _communityHintDialogOpen = true;
+        var closeButton = this.FindControl<MyIconButton>("BtnHintClose");
+        closeButton?.IsEnabled = false;
         try
         {
-            _btnLaunch.Text = _viewModel.LaunchButtonText;
-            _btnLaunch.IsEnabled = _viewModel.IsLaunchButtonEnabled && !_viewModel.IsShowingLaunching;
-            _btnVersion.Text = _viewModel.VersionNameText;
+            var result = await DialogService.Instance.ShowAsync(
+                new InputDialogRequest
+                {
+                    Title = Lang.Text("Launch.Right.CommunityHint.InputTitle"),
+                    Buttons = DialogButtons.OkCancel,
+                    HighLight = false
+                });
+            var input = result.InputText ?? "";
+            if (string.IsNullOrWhiteSpace(input))
+                return;
 
-            var launching = _viewModel.IsShowingLaunching;
-            _panLaunching.IsVisible = launching;
-            _panInput.IsVisible = !launching;
-            if (launching)
+            input = new string(input.Where(char.IsAsciiLetter).ToArray()).ToLowerInvariant();
+            if (!input.Contains("pclcommunity"))
             {
-                _labLaunchingStage.Text =
-                    _viewModel.LaunchingStageText + " · " + _viewModel.LaunchingProgressText;
-                _barLaunch.Value = Math.Clamp(_viewModel.ShowProgress, 0d, 1d);
+                HintService.Show(Hints.Info(Lang.Text("Launch.Right.CommunityHint.WrongInput")));
+                return;
             }
+
+            AnimationService.DisposeControl(_panHint, true);
+            States.Hint.CEMessage = false;
+        }
+        finally
+        {
+            _communityHintDialogOpen = false;
+            closeButton?.IsEnabled = true;
+        }
+    }
+
+    #region 主页内容
+
+    private void ApplyBackgroundUpdate(HomepageContent content)
+    {
+        // 初次解析（通常是缓存）尚未落到界面时，暂存后台结果，等初次内容落地后再应用。
+        if (_initialContentPending)
+        {
+            _pendingBackgroundContent = content;
+            return;
+        }
+
+        if (content.ErrorMessage is { Length: > 0 } error)
+        {
+            // 有缓存/旧页时保留最后一次成功内容，只在完全没有内容时显示错误卡。
+            if (_panCustom.Children.Count > 0)
+            {
+                LogWrapper.Info("Launch", $"[Page] 主页后台刷新失败，保留最后一次成功内容：{error}");
+                HintService.Show(Hints.Error(error));
+                return;
+            }
+
+            ShowHomepageError(error);
+            return;
+        }
+
+        LoadContent(content);
+    }
+
+    private void LoadContent(HomepageContent content)
+    {
+        if (content.Kind != HomepageSourceKind.CustomXaml)
+            _lastWpfToastSource = null;
+
+        switch (content.Kind)
+        {
+            case HomepageSourceKind.Blank:
+                LogWrapper.Info("Launch", "[Page] 实例化：清空主页 UI，来源为空");
+                _panCustom.Children.Clear();
+                _panHint.Margin = new Thickness(0d, 0d, 0d, 15d);
+                break;
+
+            case HomepageSourceKind.Removed:
+                DialogService.Instance.ShowNotification(
+                    new TextDialogRequest
+                    {
+                        Title = Lang.Text("Common.Dialog.Title"),
+                        Content = Lang.Text("Launch.Homepage.Preset.EchoCave.Removed"),
+                        Buttons = DialogButtons.Ok
+                    });
+                break;
+
+            case HomepageSourceKind.Trivia:
+                _panCustom.Children.Clear();
+                _panCustom.Children.Add(
+                    HomepageCardRenderer.CreateTrivia(
+                        content.TriviaText ?? "",
+                        ForceRefresh,
+                        key => FindResource(key) as IBrush));
+                break;
+
+            case HomepageSourceKind.NewsFeed:
+                _panCustom.Children.Clear();
+                _panCustom.Children.Add(_newsView);
+                _newsView.Reload();
+                break;
+
+            case HomepageSourceKind.CustomXaml:
+            default:
+                LoadCustomXaml(content);
+                break;
+        }
+    }
+
+    private void LoadCustomXaml(HomepageContent content)
+    {
+        if (string.IsNullOrWhiteSpace(content.Xaml))
+        {
+            if (content.ErrorMessage is { Length: > 0 } error)
+                ShowHomepageError(error);
+            else
+                ShowHomepageError(
+                    Lang.Text(
+                        "Launch.Homepage.LoadFailed.Message",
+                        Lang.Text("Launch.Homepage.LoadFailed.Title")));
+
+            return;
+        }
+
+        var xaml = PageHelpDetailViewModel.ReplaceArguments(content.Xaml);
+        if (!HomepageXamlFormatDetector.IsXaml(xaml))
+        {
+            LogWrapper.Error(
+                new InvalidDataException("主页内容不是 XAML/AXAML"),
+                "Launch",
+                $"[Page] 主页内容格式无效：{content.SourceText}");
+            ShowHomepageError(Lang.Text("Launch.Homepage.InvalidXaml"));
+            return;
+        }
+
+        var format = HomepageXamlFormatDetector.Detect(xaml);
+        if (format == HomepageXamlFormat.Avalonia)
+        {
+            _lastWpfToastSource = null;
+            var avaloniaResult = HomepageAvaloniaRenderer.Render(xaml);
+            if (avaloniaResult.Error is { Length: > 0 }
+                || avaloniaResult.Root is null)
+            {
+                var avaloniaError = avaloniaResult.Error ?? "未知渲染错误";
+                LogWrapper.Error(
+                    new InvalidOperationException(avaloniaError),
+                    "Launch",
+                    $"[Page] AXAML 主页渲染失败：{content.SourceText}");
+                ShowHomepageError(
+                    Lang.Text(
+                        "Launch.Homepage.LoadFailed.Message",
+                        avaloniaError));
+                return;
+            }
+
+            _panCustom.Children.Clear();
+            _panCustom.Children.Add(avaloniaResult.Root);
+            ApplyHomepageLivePatchesFromFile();
+            return;
+        }
+
+        var rendered = RuntimeXamlRenderer.RenderFragment(xaml, FindResource);
+        if (!rendered.Success)
+        {
+            LogWrapper.Error(
+                new InvalidOperationException(rendered.Error ?? "未知渲染错误"),
+                "Launch",
+                $"[Page] 运行时 XAML 主页渲染失败：{content.SourceText}");
+            ShowHomepageError(
+                Lang.Text(
+                    "Launch.Homepage.LoadFailed.Message",
+                    rendered.Error ?? Lang.Text("Launch.Homepage.LoadFailed.Title")));
+            return;
+        }
+
+        if (rendered.Controls.Count == 0)
+        {
+            ShowHomepageError(
+                Lang.Text(
+                    "Launch.Homepage.LoadFailed.Message",
+                    "主页中没有可显示的内容"));
+            return;
+        }
+
+        ShowWpfMigrationToast(content);
+
+        _panCustom.Children.Clear();
+        foreach (var control in rendered.Controls)
+            _panCustom.Children.Add(control);
+
+        ApplySanitizeHints(rendered);
+        ApplyHomepageLivePatchesFromFile();
+    }
+
+    private void ShowWpfMigrationToast(HomepageContent content)
+    {
+        var source = content.SourceText ?? "wpf";
+        if (string.Equals(_lastWpfToastSource, source, StringComparison.Ordinal))
+            return;
+
+        _lastWpfToastSource = source;
+        HintService.Show(
+            Hints.Warning(Lang.Text("Launch.Homepage.WpfMigrationToast")));
+    }
+
+    private static void ApplySanitizeHints(RuntimeXamlRenderResult result)
+    {
+        foreach (var warning in result.Warnings.Distinct(StringComparer.Ordinal))
+            LauncherCommon.Log(
+                "[Page] 主页运行时 XAML 警告：" + warning,
+                LauncherLogLevel.Debug);
+
+        foreach (var unsupported in result.UnsupportedEventTypes.Distinct(StringComparer.Ordinal))
+            HintService.Show(
+                Hints.Error(Lang.Text("Event.Sanitize.UnsupportedTypeHint", unsupported)));
+
+        foreach (var unknown in result.UnrecognizedEventTypes.Distinct(StringComparer.Ordinal))
+            HintService.Show(
+                Hints.Error(Lang.Text("Event.Sanitize.UnknownTypeHint", unknown)));
+    }
+
+    private void ShowHomepageError(string message)
+    {
+        LogWrapper.Info("Launch", $"[Page] 主页加载失败：{message}");
+        if (LauncherCommon.ModeDebug)
+        {
+            _ = ShowHomepageErrorDialogAsync(message);
+            return;
+        }
+
+        HintService.Show(Hints.Error(Lang.Text("Launch.Homepage.LoadFailed.Title")));
+    }
+
+    private async Task ShowHomepageErrorDialogAsync(string message)
+    {
+        try
+        {
+            var result = await DialogService.Instance.ShowAsync(
+                new TextDialogRequest
+                {
+                    Title = Lang.Text("Launch.Homepage.LoadFailed.Title"),
+                    Content = Lang.Text("Launch.Homepage.LoadFailed.Message", message),
+                    Buttons = DialogButtons.Create(
+                        "Launch.Homepage.LoadFailed.Retry",
+                        "Common.Action.Cancel"),
+                    HighLight = false
+                });
+            if (result.IsConfirmed)
+                ForceRefresh();
         }
         catch (Exception ex)
         {
-            LogWrapper.Debug(ex, "UI", "刷新启动按钮失败");
+            LogWrapper.Debug(ex, "Launch", "显示主页错误弹窗失败");
         }
     }
 
-    private void UpdateAccountText()
+    private object? FindResource(string key)
     {
-        try
-        {
-            var profile = ProfileService.Current;
-            _btnAccount.Text = profile?.LoginName is { Length: > 0 } name
-                ? name
-                : Lang.Text("Launch.Ai.Account.Login");
-        }
-        catch (Exception)
-        {
-            _btnAccount.Text = Lang.Text("Launch.Ai.Account.Login");
-        }
-    }
-
-    private void Launch_OnClick(object? sender, PointerReleasedEventArgs? e)
-    {
-        _viewModel?.LaunchCommand.Execute(null);
-    }
-
-    private void Version_OnClick(object? sender, PointerReleasedEventArgs? e)
-    {
-        _viewModel?.SelectInstanceCommand.Execute(null);
-    }
-
-    private void Settings_OnClick(object? sender, EventArgs e)
-    {
-        PageRouter.Navigate(PageIds.Setup);
-    }
-
-    private void Account_OnClick(object? sender, PointerReleasedEventArgs? e)
-    {
-        AttachLaunchController();
-        _panDrawerLayer.IsVisible = true;
-    }
-
-    private void CloseDrawer_OnClick(object? sender, EventArgs e)
-    {
-        CloseDrawer();
-        UpdateAccountText();
-    }
-
-    private void DrawerMask_OnPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        CloseDrawer();
-        UpdateAccountText();
-    }
-
-    private void CloseDrawer()
-    {
-        _panDrawerLayer.IsVisible = false;
-    }
-
-    private void CancelLaunch_OnClick(object? sender, PointerReleasedEventArgs? e)
-    {
-        _viewModel?.CancelLaunchCommand.Execute(null);
+        return this.TryFindResource(key, out var value) ? value : null;
     }
 
     #endregion
 
-    #region AI 对话
+    #region CustomLive.json
 
-    private void UpdateSendState()
+    private void EnsureHomepageLiveWatcher()
     {
-        // 回复进行中也允许发送：消息会排队，等当前回复结束后自动继续。
-        _btnSend.IsEnabled = true;
-        _btnCancelReply.IsVisible = AiChatService.Instance.IsBusy;
-    }
-
-    private void Send_OnClick(object? sender, EventArgs e)
-    {
-        SendCurrentInput();
-    }
-
-    private void Input_OnKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter)
-            return;
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
-            return;
-
-        SendCurrentInput();
-        e.Handled = true;
-    }
-
-    private void SendCurrentInput()
-    {
-        var text = _txtInput.Text?.Trim() ?? "";
-        if (text.Length == 0 && _pendingAttachments.Count == 0)
-            return;
-
-        if (!AiChatService.IsConfigured)
+        if (Config.Preference.Homepage.Type != 1)
         {
-            AddLocalBubble(Lang.Text("Launch.Ai.NotConfigured"), true);
-            PageRouter.Navigate(PageIds.Setup, SubPageIds.SetupAi);
+            if (_homepageLiveWatcher is not null)
+                DisposeHomepageLiveWatcher();
             return;
         }
 
-        var attachments = _pendingAttachments.ToList();
-        _txtInput.Text = "";
-        _pendingAttachments.Clear();
-        RebuildPendingAttachments();
-        _ = AiChatService.Instance.SendAsync(
-            text.Length > 0 ? text : Lang.Text("Launch.Ai.Attachment.Placeholder"),
-            attachments);
-    }
-
-    private void AttachFiles_OnClick(object? sender, EventArgs e)
-    {
-        _ = AttachFilesAsync();
-    }
-
-    private async Task AttachFilesAsync()
-    {
-        const int maxAttachments = 6;
-        if (_pendingAttachments.Count >= maxAttachments)
-        {
-            HintService.Show(Hints.Warning(Lang.Text("Launch.Ai.Attachment.Limit")));
-            return;
-        }
-
-        var files = await SystemDialogs.SelectFilesAsync(
-            "图片|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp|文本文件|*.txt;*.md;*.json;*.log;*.yml;*.yaml;*.toml;*.ini;*.cfg;*.conf;*.xml;*.html;*.css;*.js;*.ts;*.cs;*.java;*.kt;*.py;*.sh;*.ps1;*.bat;*.csv;*.mcmeta;*.lang|所有文件|*.*",
-            Lang.Text("Launch.Ai.Attach"));
-        if (files.Length == 0)
+        if (_homepageLiveWatcher is not null)
             return;
 
-        foreach (var file in files)
+        try
         {
-            if (_pendingAttachments.Count >= maxAttachments)
+            var directory = Paths.Data;
+            Directory.CreateDirectory(directory);
+            WriteHomepageLiveSupportMarker(directory);
+
+            _homepageLiveWatcher = new FileSystemWatcher(directory, HomepageLivePatchFileName)
             {
-                HintService.Show(Hints.Warning(Lang.Text("Launch.Ai.Attachment.Limit")));
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName
+            };
+            _homepageLiveWatcher.Changed += (_, _) => QueueHomepageLivePatchApply();
+            _homepageLiveWatcher.Created += (_, _) => QueueHomepageLivePatchApply();
+            _homepageLiveWatcher.Renamed += (_, _) => QueueHomepageLivePatchApply();
+            _homepageLiveWatcher.EnableRaisingEvents = true;
+            QueueHomepageLivePatchApply();
+        }
+        catch (Exception ex)
+        {
+            LauncherCommon.Log(
+                ex,
+                "[Page] 启动自定义主页实时补丁监视失败",
+                LauncherLogLevel.Developer);
+        }
+    }
+
+    private void DisposeHomepageLiveWatcher()
+    {
+        try
+        {
+            _homepageLiveWatcher?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            LauncherCommon.Log(
+                ex,
+                "[Page] 释放自定义主页实时补丁监视失败",
+                LauncherLogLevel.Developer);
+        }
+
+        _homepageLiveWatcher = null;
+
+        try
+        {
+            if (_homepageLivePatchTimer is not null)
+            {
+                _homepageLivePatchTimer.Stop();
+                _homepageLivePatchTimer.Tick -= HomepageLivePatchTimerTick;
+                _homepageLivePatchTimer = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            LauncherCommon.Log(
+                ex,
+                "[Page] 释放自定义主页实时补丁防抖计时器失败",
+                LauncherLogLevel.Developer);
+        }
+
+        DeleteHomepageLiveSupportMarker();
+    }
+
+    private void QueueHomepageLivePatchApply()
+    {
+        LauncherCommon.RunInUi(() =>
+        {
+            _homepageLivePatchTimer ??= new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(120)
+            };
+            _homepageLivePatchTimer.Tick -= HomepageLivePatchTimerTick;
+            _homepageLivePatchTimer.Tick += HomepageLivePatchTimerTick;
+            _homepageLivePatchTimer.Stop();
+            _homepageLivePatchTimer.Start();
+        });
+    }
+
+    private void HomepageLivePatchTimerTick(object? sender, EventArgs e)
+    {
+        _homepageLivePatchTimer?.Stop();
+        ApplyHomepageLivePatchesFromFile();
+    }
+
+    private void ApplyHomepageLivePatchesFromFile()
+    {
+        if (_panCustom.Children.Count == 0)
+            return;
+        if (Config.Preference.Homepage.Type != 1)
+            return;
+
+        var file = Path.Combine(Paths.Data, HomepageLivePatchFileName);
+        if (!File.Exists(file))
+            return;
+
+        try
+        {
+            var token = JsonNode.Parse(
+                ReadHomepageLivePatchFile(file),
+                new JsonNodeOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                },
+                new JsonDocumentOptions
+                {
+                    CommentHandling = JsonCommentHandling.Skip,
+                    AllowTrailingCommas = true
+                });
+            if (token is null)
+                return;
+
+            foreach (var patch in EnumerateHomepageLivePatches(token))
+                ApplyHomepageLivePatch(patch);
+        }
+        catch (Exception ex)
+        {
+            LauncherCommon.Log(
+                ex,
+                "[Page] 应用自定义主页实时补丁失败",
+                LauncherLogLevel.Developer);
+        }
+    }
+
+    private static string ReadHomepageLivePatchFile(string file)
+    {
+        Exception? lastException = null;
+        for (var i = 0; i < 3; i++)
+            try
+            {
+                using var stream = new FileStream(
+                    file,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd();
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+                Thread.Sleep(50);
+            }
+
+        throw lastException ?? new IOException("无法读取自定义主页实时补丁文件");
+    }
+
+    private static void WriteHomepageLiveSupportMarker(string directory)
+    {
+        try
+        {
+            var marker = new JsonObject(
+                new JsonNodeOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                })
+            {
+                ["processId"] = Environment.ProcessId,
+                ["processPath"] = Environment.ProcessPath ?? "",
+                ["patchFile"] = HomepageLivePatchFileName,
+                ["startedAt"] = DateTime.Now.ToString("O", CultureInfo.InvariantCulture)
+            };
+            File.WriteAllText(
+                Path.Combine(directory, HomepageLiveSupportFileName),
+                marker.ToJsonString());
+        }
+        catch (Exception ex)
+        {
+            LauncherCommon.Log(
+                ex,
+                "[Page] 写入自定义主页实时补丁支持标记失败",
+                LauncherLogLevel.Developer);
+        }
+    }
+
+    private static void DeleteHomepageLiveSupportMarker()
+    {
+        try
+        {
+            var file = Path.Combine(Paths.Data, HomepageLiveSupportFileName);
+            if (!File.Exists(file))
+                return;
+
+            var marker = JsonNode.Parse(
+                ReadHomepageLivePatchFile(file),
+                new JsonNodeOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                },
+                new JsonDocumentOptions
+                {
+                    CommentHandling = JsonCommentHandling.Skip,
+                    AllowTrailingCommas = true
+                }) as JsonObject;
+            if (marker?["processId"]?.GetValue<int>() == Environment.ProcessId)
+                File.Delete(file);
+        }
+        catch (Exception ex)
+        {
+            LauncherCommon.Log(
+                ex,
+                "[Page] 删除自定义主页实时补丁支持标记失败",
+                LauncherLogLevel.Developer);
+        }
+    }
+
+    private static IEnumerable<JsonObject> EnumerateHomepageLivePatches(JsonNode token)
+    {
+        switch (token)
+        {
+            case JsonObject obj
+                when TryGetProperty(obj, "patches", out var patchesNode)
+                && patchesNode is JsonArray patches:
+            {
+                foreach (var patch in patches.OfType<JsonObject>())
+                    yield return patch;
+                yield break;
+            }
+
+            case JsonObject obj
+                when TryGetString(obj, "target", "tag", "name") is not null:
+            {
+                yield return obj;
+                yield break;
+            }
+
+            case JsonObject obj:
+            {
+                foreach (var property in obj)
+                {
+                    if (property.Value is not JsonObject patch)
+                        continue;
+
+                    var copy = (JsonObject)JsonNode.Parse(
+                        patch.ToJsonString(),
+                        new JsonNodeOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        },
+                        new JsonDocumentOptions
+                        {
+                            CommentHandling = JsonCommentHandling.Skip,
+                            AllowTrailingCommas = true
+                        })!;
+                    if (!TryGetProperty(copy, "target", out _))
+                        copy["target"] = property.Key;
+                    yield return copy;
+                }
+
                 break;
             }
 
-            await AddAttachmentFromPathAsync(file);
+            case JsonArray array:
+            {
+                foreach (var patch in array.OfType<JsonObject>())
+                    yield return patch;
+                break;
+            }
+        }
+    }
+
+    private void ApplyHomepageLivePatch(JsonObject patch)
+    {
+        var target = TryGetString(patch, "target", "tag", "name");
+        if (string.IsNullOrWhiteSpace(target))
+            return;
+
+        foreach (var element in FindElementsByTag(_panCustom, target))
+            ApplyHomepageLivePatchToElement(element, patch);
+    }
+
+    private void ApplyHomepageLivePatchToElement(Control element, JsonObject patch)
+    {
+        SetPropertyIfPresent(element, patch, "text", "Text");
+        SetPropertyIfPresent(element, patch, "title", "Title");
+        SetPropertyIfPresent(element, patch, "info", "Info");
+        SetPropertyIfPresent(element, patch, "tooltip", "ToolTip");
+        SetPropertyIfPresent(element, patch, "toolTip", "ToolTip");
+        SetPropertyIfPresent(element, patch, "visibility", "Visibility");
+        SetPropertyIfPresent(element, patch, "isEnabled", "IsEnabled");
+        SetPropertyIfPresent(element, patch, "opacity", "Opacity");
+
+        if (TryGetProperty(patch, "properties", out var propertiesNode)
+            && propertiesNode is JsonObject properties)
+            foreach (var property in properties)
+                TrySetElementProperty(
+                    element,
+                    property.Key,
+                    property.Value?.ToString() ?? "");
+
+        var childrenXaml = TryGetString(patch, "childrenXaml", "ChildrenXaml");
+        if (!string.IsNullOrEmpty(childrenXaml) && element is Panel panel)
+            ReplacePanelChildren(panel, childrenXaml);
+    }
+
+    private static void SetPropertyIfPresent(
+        Control element,
+        JsonObject patch,
+        string jsonName,
+        string propertyName)
+    {
+        if (TryGetProperty(patch, jsonName, out var value))
+            TrySetElementProperty(element, propertyName, value?.ToString() ?? "");
+    }
+
+    private static bool TrySetElementProperty(
+        Control element,
+        string propertyName,
+        string value)
+    {
+        if (!HomepageLiveAllowedProperties.TryGetValue(propertyName, out var allowedPropertyName))
+        {
+            LogWrapper.Info("Launch", $"[Page] 忽略不支持的主页补丁属性：{propertyName}");
+            return false;
         }
 
-        RebuildPendingAttachments();
-    }
-
-    private void OnPastingFromClipboard(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not TextBox textBox)
-            return;
-
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
-            return;
-
-        _ = PasteFromClipboardAsync(textBox, clipboard, e);
-    }
-
-    private async Task PasteFromClipboardAsync(
-        TextBox textBox,
-        IClipboard clipboard,
-        RoutedEventArgs e)
-    {
         try
         {
-            var files = await clipboard.TryGetFilesAsync();
-            var paths = files?.Select(item => item?.Path is { IsAbsoluteUri: true, Scheme: "file" } uri
-                    ? uri.LocalPath
-                    : null)
-                .OfType<string>()
-                .Where(path => !string.IsNullOrWhiteSpace(path))
-                .ToArray() ?? [];
-            if (paths.Length > 0)
+            switch (allowedPropertyName)
             {
-                e.Handled = true;
-                foreach (var path in paths)
-                {
-                    if (_pendingAttachments.Count >= 6)
+                case "ToolTip":
+                    ToolTip.SetTip(element, value);
+                    return true;
+
+                case "Visibility":
+                    element.IsVisible = value.Trim().ToLowerInvariant() switch
                     {
-                        HintService.Show(Hints.Warning(Lang.Text("Launch.Ai.Attachment.Limit")));
-                        break;
-                    }
-
-                    await AddAttachmentFromPathAsync(path);
-                }
-
-                RebuildPendingAttachments();
-                return;
+                        "visible" or "true" or "1" => true,
+                        "collapsed" or "hidden" or "false" or "0" => false,
+                        _ => element.IsVisible
+                    };
+                    return true;
             }
 
-            var bitmap = await clipboard.TryGetBitmapAsync();
-            if (bitmap is not null)
-            {
-                e.Handled = true;
-                AddBitmapAttachment(bitmap);
-                return;
-            }
-
-            // 没有文件或图片时保持默认文本粘贴行为。
-        }
-        catch (Exception ex)
-        {
-            LogWrapper.Debug(ex, "UI", "读取剪贴板附件失败");
-        }
-    }
-
-    private void AddBitmapAttachment(Bitmap bitmap)
-    {
-        if (_pendingAttachments.Count >= 6)
-        {
-            HintService.Show(Hints.Warning(Lang.Text("Launch.Ai.Attachment.Limit")));
-            return;
-        }
-
-        try
-        {
-            using var stream = new MemoryStream();
-            bitmap.Save(stream);
-            _pendingAttachments.Add(new AiAttachment
-            {
-                Name = Lang.Text("Launch.Ai.Attachment.PastedImage")
-                       + " " + DateTime.Now.ToString("HHmmss") + ".png",
-                IsImage = true,
-                DataUrl = "data:image/png;base64," + Convert.ToBase64String(stream.ToArray())
-            });
-            RebuildPendingAttachments();
-        }
-        catch (Exception ex)
-        {
-            HintService.Show(Hints.Warning(Lang.Text("Launch.Ai.Attachment.Failed", ex.Message)));
-        }
-    }
-
-    private static readonly string[] InlineImageExtensions =
-        [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"];
-
-    private static readonly string[] InlineTextExtensions =
-    [
-        ".txt", ".md", ".json", ".log", ".yml", ".yaml", ".toml", ".ini", ".cfg",
-        ".conf", ".xml", ".html", ".css", ".js", ".ts", ".cs", ".java", ".kt",
-        ".py", ".sh", ".ps1", ".bat", ".csv", ".mcmeta", ".lang"
-    ];
-
-    private async Task<bool> AddAttachmentFromPathAsync(string file)
-    {
-        try
-        {
-            if (Directory.Exists(file))
-            {
-                HintService.Show(Hints.Warning(
-                    Lang.Text("Launch.Ai.Attachment.Directory", Path.GetFileName(file))));
-                return false;
-            }
-
-            var info = new FileInfo(file);
-            if (!info.Exists)
+            var property = element
+                .GetType()
+                .GetProperty(
+                    allowedPropertyName,
+                    BindingFlags.Instance | BindingFlags.Public);
+            if (property is null || !property.CanWrite)
                 return false;
 
-            var extension = Path.GetExtension(file).ToLowerInvariant();
-            var isImage = InlineImageExtensions.Contains(extension);
+            var propertyType = Nullable.GetUnderlyingType(property.PropertyType)
+                ?? property.PropertyType;
+            object convertedValue;
+            var trimmedValue = value.Trim();
+            if (propertyType == typeof(string))
+                convertedValue = value;
+            else if (propertyType == typeof(bool) && bool.TryParse(trimmedValue, out var boolValue))
+                convertedValue = boolValue;
+            else if (propertyType == typeof(int)
+                     && int.TryParse(
+                         trimmedValue,
+                         NumberStyles.Integer,
+                         CultureInfo.InvariantCulture,
+                         out var intValue))
+                convertedValue = intValue;
+            else if (propertyType == typeof(double)
+                     && double.TryParse(
+                         trimmedValue,
+                         NumberStyles.Float | NumberStyles.AllowThousands,
+                         CultureInfo.InvariantCulture,
+                         out var doubleValue))
+                convertedValue = doubleValue;
+            else if (propertyType.IsEnum
+                     && Enum.TryParse(propertyType, trimmedValue, true, out var enumValue))
+                convertedValue = enumValue;
+            else
+                return false;
 
-            if (isImage && info.Length <= 8 * 1024 * 1024)
-            {
-                var mime = extension switch
-                {
-                    ".png" => "image/png",
-                    ".gif" => "image/gif",
-                    ".webp" => "image/webp",
-                    ".bmp" => "image/bmp",
-                    _ => "image/jpeg"
-                };
-                var bytes = await File.ReadAllBytesAsync(file);
-                var data = Convert.ToBase64String(bytes);
-                _pendingAttachments.Add(new AiAttachment
-                {
-                    Name = info.Name,
-                    IsImage = true,
-                    DataUrl = $"data:{mime};base64,{data}"
-                });
-                return true;
-            }
-
-            if (!isImage
-                && InlineTextExtensions.Contains(extension)
-                && info.Length <= 1024 * 1024)
-            {
-                var text = await File.ReadAllTextAsync(file);
-                if (text.Length > 200000)
-                    text = text[..200000] + Environment.NewLine + "…（已截断）";
-                _pendingAttachments.Add(new AiAttachment
-                {
-                    Name = info.Name,
-                    TextContent = text
-                });
-                return true;
-            }
-
-            // 大文件、二进制或不适合内联的图片：复制到工作区，让 AI 用文件工具读取。
-            var target = await CopyAttachmentToWorkspaceAsync(file);
-            _pendingAttachments.Add(new AiAttachment
-            {
-                Name = info.Name,
-                IsImage = isImage,
-                LocalPath = target
-            });
+            property.SetValue(element, convertedValue);
             return true;
         }
         catch (Exception ex)
         {
-            HintService.Show(Hints.Warning(
-                Lang.Text("Launch.Ai.Attachment.Failed", ex.Message)));
+            LauncherCommon.Log(
+                ex,
+                $"[Page] 设置主页补丁属性失败：{propertyName}",
+                LauncherLogLevel.Developer);
             return false;
         }
     }
 
-    /// <summary>把附件复制到 AI 工作区（未配置时为 PCL/AiWorkspace），返回新路径。</summary>
-    private static async Task<string> CopyAttachmentToWorkspaceAsync(string file)
+    private void ReplacePanelChildren(Panel panel, string childrenXaml)
     {
-        var root = AiChatService.GetWorkspaceDirectory();
-        Directory.CreateDirectory(root);
-
-        var name = Path.GetFileName(file);
-        if (string.IsNullOrWhiteSpace(name))
-            name = "attachment";
-        if (name.Length > 120)
-            name = name[^120..];
-
-        var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-        var target = Path.Combine(root, $"{stamp}-{name}");
-        var index = 1;
-        while (File.Exists(target))
-            target = Path.Combine(root, $"{stamp}-{index++}-{name}");
-
-        await Task.Run(() => File.Copy(file, target));
-        return target;
-    }
-
-    /// <summary>
-    /// 主窗口的拖放会先交给页面。启动页把拖进来的文件全部当成对话附件：
-    /// 小文件就地内联，大文件复制到工作区后把路径交给 AI。
-    /// </summary>
-    private bool OnFileDropped(IReadOnlyList<string> paths)
-    {
-        if (PageRouter.Current.Page != PageIds.Launch)
-            return false;
-
-        Dispatcher.UIThread.Post(() => _ = AddDroppedFilesAsync(paths));
-        return true;
-    }
-
-    private async Task AddDroppedFilesAsync(IReadOnlyList<string> paths)
-    {
-        foreach (var path in paths)
+        var rendered = RuntimeXamlRenderer.RenderFragment(
+            PageHelpDetailViewModel.ReplaceArguments(childrenXaml),
+            FindResource);
+        if (!rendered.Success)
         {
-            if (_pendingAttachments.Count >= 6)
+            LauncherCommon.Log(
+                new InvalidOperationException(rendered.Error ?? "未知错误"),
+                "[Page] 替换主页子内容失败",
+                LauncherLogLevel.Developer);
+            return;
+        }
+
+        // MyCard 的前三个子元素是阴影、背景与标题层；只替换真正的页面内容。
+        var firstContentIndex = panel is MyCard ? Math.Min(3, panel.Children.Count) : 0;
+        for (var i = panel.Children.Count - 1; i >= firstContentIndex; i--)
+            panel.Children.RemoveAt(i);
+
+        foreach (var child in rendered.Controls)
+            panel.Children.Add(child);
+    }
+
+    private static IEnumerable<Control> FindElementsByTag(Control root, string tag)
+    {
+        if (root.Tag is { } rootTag
+            && string.Equals(rootTag.ToString(), tag, StringComparison.OrdinalIgnoreCase))
+            yield return root;
+
+        foreach (var child in root.GetLogicalChildren().OfType<Control>())
+        foreach (var element in FindElementsByTag(child, tag))
+            yield return element;
+    }
+
+    private static string? TryGetString(JsonObject obj, params string[] names)
+    {
+        foreach (var name in names)
+            if (TryGetProperty(obj, name, out var value))
+                return value?.ToString();
+
+        return null;
+    }
+
+    private static bool TryGetProperty(JsonObject obj, string name, out JsonNode? value)
+    {
+        foreach (var property in obj)
+            if (property.Key.Equals(name, StringComparison.OrdinalIgnoreCase))
             {
-                HintService.Show(Hints.Warning(Lang.Text("Launch.Ai.Attachment.Limit")));
-                break;
+                value = property.Value;
+                return true;
             }
 
-            await AddAttachmentFromPathAsync(path);
-        }
-
-        RebuildPendingAttachments();
-    }
-
-    private void RebuildPendingAttachments()
-    {
-        _panPendingAttachments.Children.Clear();
-        _panPendingAttachments.IsVisible = _pendingAttachments.Count > 0;
-        foreach (var attachment in _pendingAttachments.ToList())
-        {
-            var label = new TextBlock
-            {
-                Text = (attachment.IsImage ? "🖼 " : "📎 ") + attachment.Name
-                       + (attachment.LocalPath is null
-                           ? ""
-                           : " → " + Lang.Text("Launch.Ai.Attachment.Workspace")),
-                FontSize = 11,
-                MaxWidth = 180,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            var remove = new MyIconButton
-            {
-                Width = 18,
-                Height = 18,
-                LogoScale = 0.7,
-                SvgIcon = "lucide/x"
-            };
-            remove.Click += (_, _) =>
-            {
-                _pendingAttachments.Remove(attachment);
-                RebuildPendingAttachments();
-            };
-            var chipPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 4
-            };
-            chipPanel.Children.Add(label);
-            chipPanel.Children.Add(remove);
-            var chip = new Border
-            {
-                Background = new SolidColorBrush(Color.FromArgb(30, 128, 128, 128)),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(8, 3),
-                Margin = new Thickness(0, 0, 6, 6),
-                Child = chipPanel
-            };
-            _panPendingAttachments.Children.Add(chip);
-        }
-    }
-
-    private void CancelReply_OnClick(object? sender, EventArgs e)
-    {
-        AiChatService.Instance.Cancel();
-    }
-
-    private void ClearChat_OnClick(object? sender, EventArgs e)
-    {
-        AiChatService.Instance.Clear();
-    }
-
-    private void NewChat_OnClick(object? sender, EventArgs e)
-    {
-        AiChatService.Instance.NewConversation();
-        CloseConversationList();
-    }
-
-    private void Conversations_OnClick(object? sender, EventArgs e)
-    {
-        if (_panConvLayer.IsVisible)
-        {
-            CloseConversationList();
-            return;
-        }
-
-        BuildConversationList();
-        _panConvLayer.IsVisible = true;
-    }
-
-    private void Compress_OnClick(object? sender, EventArgs e)
-    {
-        _ = AiChatService.Instance.CompressAsync();
-    }
-
-    private void CloseConv_OnClick(object? sender, EventArgs e)
-    {
-        CloseConversationList();
-    }
-
-    private void ConvMask_OnPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        CloseConversationList();
-    }
-
-    private void CloseConversationList()
-    {
-        _panConvLayer.IsVisible = false;
-    }
-
-    private void BuildConversationList()
-    {
-        _panConversations.Children.Clear();
-        var conversations = AiChatService.Instance.Conversations;
-        if (conversations.Count == 0)
-        {
-            _panConversations.Children.Add(new TextBlock
-            {
-                Text = Lang.Text("Launch.Ai.Conversations.Empty"),
-                FontSize = 12,
-                Opacity = 0.6,
-                Margin = new Thickness(10, 12, 10, 0)
-            });
-            return;
-        }
-
-        var currentId = AiChatService.Instance.CurrentConversation.Id;
-        foreach (var conversation in conversations)
-        {
-            var title = string.IsNullOrWhiteSpace(conversation.Title)
-                ? Lang.Text("Launch.Ai.NewChat.DefaultTitle")
-                : conversation.Title;
-            var item = new MyListItem
-            {
-                Title = title,
-                Info = conversation.UpdatedAt.ToString("MM-dd HH:mm"),
-                Tag = conversation,
-                Type = MyListItem.CheckType.Clickable,
-                Checked = conversation.Id == currentId
-            };
-            item.Click += (_, _) =>
-            {
-                AiChatService.Instance.SelectConversation(conversation.Id);
-                CloseConversationList();
-            };
-            _panConversations.Children.Add(item);
-        }
-    }
-
-    private void OnConversationsChanged()
-    {
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (_panConvLayer.IsVisible)
-                BuildConversationList();
-        });
-    }
-
-    private void OnConversationSwitched()
-    {
-        Dispatcher.UIThread.Post(() =>
-        {
-            _bubbles.Clear();
-            _panMessages.Children.Clear();
-            if (AiChatService.Instance.Messages.Count == 0)
-                ShowWelcome();
-            else
-                RenderExistingHistory();
-        });
-    }
-
-    private void OnContextUsageChanged()
-    {
-        Dispatcher.UIThread.Post(RefreshContextUsage);
-    }
-
-    private void RefreshContextUsage()
-    {
-        try
-        {
-            var usage = AiChatService.Instance.GetContextUsage();
-            _labContextUsage.Text = Lang.Text(
-                "Launch.Ai.Context.Short",
-                FormatTokenCount(usage.EstimatedTokens),
-                FormatTokenCount(usage.Limit),
-                usage.Percent.ToString("0"));
-        }
-        catch (Exception)
-        {
-            _labContextUsage.Text = "";
-        }
-    }
-
-    private static string FormatTokenCount(int value)
-    {
-        return value >= 1000
-            ? (value / 1000d).ToString("0.#") + "k"
-            : value.ToString();
-    }
-
-    private void ContextUsage_OnPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-            return;
-
-        var usage = AiChatService.Instance.GetContextUsage();
-        var threshold = Math.Max(4000, (int)(usage.Limit * 0.95));
-
-        var content = string.Join(
-            Environment.NewLine,
-            Lang.Text("Launch.Ai.Context.MessageCount", usage.MessageCount),
-            Lang.Text("Launch.Ai.Context.Characters", usage.Characters),
-            Lang.Text("Launch.Ai.Context.EstimatedTokens", usage.EstimatedTokens),
-            Lang.Text("Launch.Ai.Context.Limit", usage.Limit),
-            Lang.Text("Launch.Ai.Context.Percent", usage.Percent.ToString("0.0")),
-            Lang.Text("Launch.Ai.Context.Threshold", threshold),
-            Lang.Text(
-                "Launch.Ai.Context.HasSummary",
-                usage.HasSummary ? Lang.Text("Common.Option.Yes") : Lang.Text("Common.Option.No")));
-
-        _ = DialogService.Instance.ShowAsync(new TextDialogRequest
-        {
-            Title = Lang.Text("Launch.Ai.Context.Title"),
-            Content = content,
-            Buttons = DialogButtons.Ok
-        });
-    }
-
-    private void OnAiMessageAdded(AiChatMessage message)
-    {
-        Dispatcher.UIThread.Post(() => AddBubble(message));
-    }
-
-    private void OnAiMessageUpdated(AiChatMessage message)
-    {
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (!_bubbles.TryGetValue(message, out var bubble))
-                return;
-
-            if (message.Role == AiRole.Tool)
-            {
-                bubble.Content.Text = ComposeToolBody(message);
-            }
-            else if (message.Role == AiRole.Assistant)
-            {
-                bubble.Content.Text = string.IsNullOrWhiteSpace(message.Content)
-                    ? Lang.Text("Launch.Ai.Thinking")
-                    : message.Content;
-                if (!string.IsNullOrWhiteSpace(message.Reasoning))
-                    EnsureReasoningBlock(bubble, message);
-            }
-            else if (message.Role == AiRole.User)
-            {
-                bubble.Content.Text = ComposeUserBubbleText(message);
-            }
-            else
-            {
-                bubble.Content.Text = message.Content;
-            }
-
-            ScrollToEnd();
-        });
-    }
-
-    private void OnAiHistoryCleared()
-    {
-        Dispatcher.UIThread.Post(() =>
-        {
-            _bubbles.Clear();
-            _panMessages.Children.Clear();
-            if (AiChatService.Instance.Messages.Count == 0)
-            {
-                ShowWelcome();
-                return;
-            }
-
-            RenderExistingHistory();
-        });
-    }
-
-    private void OnAiBusyChanged(bool busy)
-    {
-        Dispatcher.UIThread.Post(() =>
-        {
-            UpdateSendState();
-            _panThinking.IsVisible = busy;
-            if (busy)
-            {
-                _thinkingTimer.Start();
-            }
-            else
-            {
-                _thinkingTimer.Stop();
-                for (var i = 0; i < _thinkingRotates.Length; i++)
-                {
-                    _thinkingAngles[i] = 0d;
-                    _thinkingRotates[i].Angle = 0d;
-                }
-            }
-        });
-    }
-
-    private void OnAiStatusChanged(string? status)
-    {
-        Dispatcher.UIThread.Post(() => RefreshModelLabel(status));
-    }
-
-    private void RefreshModelLabel(string? status)
-    {
-        string model;
-        try
-        {
-            model = string.IsNullOrWhiteSpace(Config.Ai.Model)
-                ? "deepseek-chat"
-                : Config.Ai.Model.Trim();
-        }
-        catch (Exception)
-        {
-            model = "deepseek-chat";
-        }
-
-        _labModel.Text = status ?? "模型 · " + model;
-    }
-
-    private void RenderExistingHistory()
-    {
-        foreach (var message in AiChatService.Instance.Messages.ToArray())
-            if (!message.IsHidden)
-                AddBubble(message, false);
-    }
-
-    /// <summary>页面重新挂载时补齐离开期间新增的消息。</summary>
-    private void SyncHistory()
-    {
-        foreach (var message in AiChatService.Instance.Messages.ToArray())
-            if (!message.IsHidden && !_bubbles.ContainsKey(message))
-                AddBubble(message, false);
-    }
-
-    private static string ComposeUserBubbleText(AiChatMessage message)
-    {
-        var display = message.Content ?? "";
-        if (message.Attachments.Count > 0)
-        {
-            var names = string.Join(
-                Environment.NewLine,
-                message.Attachments.Select(attachment =>
-                    (attachment.IsImage ? "🖼 " : "📎 ") + attachment.Name));
-            display = string.IsNullOrWhiteSpace(display)
-                ? names
-                : display + Environment.NewLine + names;
-        }
-
-        if (message.IsQueued)
-            display += (display.Length > 0 ? Environment.NewLine + Environment.NewLine : "")
-                       + Lang.Text("Launch.Ai.Queued");
-        return display;
-    }
-
-    private void AddBubble(AiChatMessage message, bool scroll = true)
-    {
-        if (message.IsHidden)
-            return;
-        if (_bubbles.ContainsKey(message))
-            return;
-
-        var panel = new StackPanel
-        {
-            Spacing = 4
-        };
-        var content = new TextBlock
-        {
-            Classes = { "AiBubbleText" },
-            MaxWidth = 620
-        };
-        var border = new Border
-        {
-            Classes = { "AiBubble" },
-            Child = panel
-        };
-        var bubble = new BubbleView
-        {
-            Border = border,
-            Panel = panel,
-            Content = content
-        };
-
-        if (message.Role == AiRole.User)
-        {
-            content.Text = ComposeUserBubbleText(message);
-            content.Classes.Add("AiBubbleTextUser");
-            border.Classes.Add("AiBubbleUser");
-            panel.Children.Add(content);
-        }
-        else if (message.Role == AiRole.Tool)
-        {
-            var label = Lang.Text("Launch.Ai.ToolExecution", message.ToolName ?? "tool");
-            var header = new TextBlock
-            {
-                Text = "▶ " + label,
-                FontSize = 11.5,
-                Opacity = 0.85
-            };
-            var body = new TextBlock
-            {
-                Text = ComposeToolBody(message),
-                Classes = { "AiBubbleText", "AiBubbleToolText" },
-                MaxWidth = 620,
-                IsVisible = false
-            };
-            header.PointerPressed += (_, e) =>
-            {
-                if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-                    return;
-                body.IsVisible = !body.IsVisible;
-                header.Text = (body.IsVisible ? "▼ " : "▶ ") + label;
-                e.Handled = true;
-            };
-            panel.Children.Add(header);
-            panel.Children.Add(body);
-            border.Classes.Add("AiBubbleTool");
-            bubble.Content = body;
-        }
-        else
-        {
-            border.Classes.Add(message.IsError ? "AiBubbleError" : "AiBubbleAssistant");
-            content.Text = string.IsNullOrWhiteSpace(message.Content)
-                ? Lang.Text("Launch.Ai.Thinking")
-                : message.Content;
-            panel.Children.Add(content);
-        }
-
-        _bubbles[message] = bubble;
-        _panMessages.Children.Add(border);
-
-        if (message.Role == AiRole.Assistant && !string.IsNullOrWhiteSpace(message.Reasoning))
-            EnsureReasoningBlock(bubble, message);
-
-        if (scroll)
-            ScrollToEnd();
-    }
-
-    private void EnsureReasoningBlock(BubbleView bubble, AiChatMessage message)
-    {
-        if (bubble.ReasoningBody is null)
-        {
-            var header = new TextBlock
-            {
-                FontSize = 11,
-                Opacity = 0.65
-            };
-            var body = new TextBlock
-            {
-                FontSize = 12,
-                Opacity = 0.65,
-                TextWrapping = TextWrapping.Wrap,
-                MaxWidth = 600
-            };
-            header.PointerPressed += (_, e) =>
-            {
-                if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-                    return;
-                ToggleReasoning(bubble);
-                e.Handled = true;
-            };
-
-            bubble.Panel.Children.Insert(0, body);
-            bubble.Panel.Children.Insert(0, header);
-            bubble.ReasoningHeader = header;
-            bubble.ReasoningBody = body;
-        }
-
-        bubble.ReasoningBody.Text = message.Reasoning;
-        if (!bubble.ReasoningManuallyToggled)
-        {
-            var expanded = string.IsNullOrWhiteSpace(message.Content);
-            bubble.ReasoningBody.IsVisible = expanded;
-            if (bubble.ReasoningHeader is not null)
-                bubble.ReasoningHeader.Text =
-                    (expanded ? "▼ " : "▶ ") + Lang.Text("Launch.Ai.Reasoning");
-        }
-    }
-
-    private void ToggleReasoning(BubbleView bubble)
-    {
-        if (bubble.ReasoningBody is null)
-            return;
-
-        var expanded = !bubble.ReasoningBody.IsVisible;
-        bubble.ReasoningBody.IsVisible = expanded;
-        bubble.ReasoningManuallyToggled = true;
-        if (bubble.ReasoningHeader is not null)
-            bubble.ReasoningHeader.Text =
-                (expanded ? "▼ " : "▶ ") + Lang.Text("Launch.Ai.Reasoning");
-    }
-
-    private static string ComposeToolBody(AiChatMessage message)
-    {
-        var nl = Environment.NewLine;
-        var result = message.Content ?? "";
-        if (result.Length > 8000)
-            result = result[..8000] + nl + "…（已截断）";
-
-        return string.IsNullOrWhiteSpace(message.ToolArguments)
-            ? result
-            : message.ToolArguments + nl + "→" + nl + result;
-    }
-
-    private void AddLocalBubble(string text, bool error)
-    {
-        var message = new AiChatMessage
-        {
-            Role = AiRole.Assistant,
-            Content = text,
-            IsError = error
-        };
-        AddBubble(message);
-    }
-
-    private void ShowWelcome()
-    {
-        var welcome = new AiChatMessage
-        {
-            Role = AiRole.Assistant,
-            Content = Lang.Text("Launch.Ai.Welcome")
-        };
-        AddBubble(welcome, false);
-
-        var actions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Margin = new Thickness(2, 2, 0, 4)
-        };
-        AddQuickAction(actions, Lang.Text("Launch.Ai.Quick.Launch"), "启动游戏");
-        AddQuickAction(actions, Lang.Text("Launch.Ai.Quick.Download"), "帮我下载安装 Minecraft 1.21.1");
-        AddQuickAction(actions, Lang.Text("Launch.Ai.Quick.Mods"), "列出当前版本的 Mod，并告诉我哪些可能不兼容");
-
-        if (!AiChatService.IsConfigured)
-        {
-            var button = new MyTextButton
-            {
-                Text = Lang.Text("Launch.Ai.Quick.Configure")
-            };
-            button.Click += (_, _) => PageRouter.Navigate(PageIds.Setup, SubPageIds.SetupAi);
-            actions.Children.Add(button);
-        }
-
-        _panMessages.Children.Add(actions);
-        ScrollToEnd();
-    }
-
-    private static void AddQuickAction(Panel host, string label, string prompt)
-    {
-        var button = new MyTextButton
-        {
-            Text = label
-        };
-        button.Click += (_, _) =>
-        {
-            if (!AiChatService.IsConfigured)
-                return;
-            _ = AiChatService.Instance.SendAsync(prompt);
-        };
-        host.Children.Add(button);
-    }
-
-    private void ScrollToEnd()
-    {
-        try
-        {
-            Dispatcher.UIThread.Post(() => _sclChat.ScrollToEnd(), DispatcherPriority.Background);
-        }
-        catch (Exception)
-        {
-            // 忽略滚动失败。
-        }
-    }
-
-    private void CheckOnboarding()
-    {
-        if (_onboardingShownThisRun)
-            return;
-
-        if (AiChatService.IsConfigured)
-        {
-            Config.Ai.OnboardingDone = true;
-            return;
-        }
-
-        if (Config.Ai.OnboardingDone)
-            return;
-
-        _onboardingShownThisRun = true;
-        Dispatcher.UIThread.Post(
-            () => PageRouter.Navigate(PageIds.Setup, SubPageIds.SetupAi),
-            DispatcherPriority.Background);
+        value = null;
+        return false;
     }
 
     #endregion
-
-    private sealed class BubbleView
-    {
-        public required Border Border { get; init; }
-
-        public required StackPanel Panel { get; init; }
-
-        public required TextBlock Content { get; set; }
-
-        public TextBlock? ReasoningHeader { get; set; }
-
-        public TextBlock? ReasoningBody { get; set; }
-
-        public bool ReasoningManuallyToggled { get; set; }
-    }
 }

@@ -15,6 +15,8 @@
 
     <sys:String x:Key="Common.Action.Save">Save</sys:String>
     <sys:String x:Key="Launch.Ai.Title">AI Assistant</sys:String>
+    <sys:String x:Key="Launch.Ai.OpenAi">Chat de IA</sys:String>
+    <sys:String x:Key="Launch.Ai.ShowHome">Mostrar inicio</sys:String>
     <sys:String x:Key="Launch.Ai.Input.Hint">Tell the AI what you want, e.g. "launch the game", "download 1.21.1", "disable incompatible mods"...</sys:String>
     <sys:String x:Key="Launch.Ai.Send">Send</sys:String>
     <sys:String x:Key="Launch.Ai.Cancel">Cancel current reply</sys:String>

@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:PCL.UI.Controls"
+             xmlns:loc="using:PCL.Core.UI"
+             x:Class="PCL.Views.Pages.Launch.PageLaunchWorkspace">
+    <Grid>
+        <ContentControl x:Name="PanAi"
+                        IsVisible="False" />
+        <ContentControl x:Name="PanHome" />
+
+        <ui:MyButton x:Name="BtnOpenAi"
+                     Height="42"
+                     Margin="26,0,0,24"
+                     Padding="22,0"
+                     HorizontalAlignment="Left"
+                     VerticalAlignment="Bottom"
+                     Text="{loc:Loc Launch.Ai.OpenAi}" />
+    </Grid>
+</UserControl>
