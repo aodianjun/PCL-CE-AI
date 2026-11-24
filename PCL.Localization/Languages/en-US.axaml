@@ -2595,7 +2595,7 @@
     <!-- Setup.About.Legal -->
 
     <sys:String x:Key="Setup.About.Legal.CommunityLobbyPrivacy">Community lobby privacy policy</sys:String>
-    <sys:String x:Key="Setup.About.Legal.CommunitySource">PCL CE-AI source code</sys:String>
+    <sys:String x:Key="Setup.About.Legal.CommunitySource">PCL CE source code</sys:String>
     <sys:String x:Key="Setup.About.Legal.CopyrightText">Copyright © PCL Community &amp; LTCat (龙腾猫跃) 2026.&#xD;NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.</sys:String>
     <sys:String x:Key="Setup.About.Legal.NatayarkTerms">Natayark OpenID ToS</sys:String>
     <sys:String x:Key="Setup.About.Legal.OtherInfo">Other information</sys:String>
@@ -2607,8 +2607,8 @@
 
     <sys:String x:Key="Setup.About.SpecialThanks.GoBlog">Blog</sys:String>
     <sys:String x:Key="Setup.About.SpecialThanks.Info.Bmclapi">Provided BMCLAPI mirror and Forge installation tool. Details at https://bmclapi.bangbang93.com</sys:String>
-    <sys:String x:Key="Setup.About.SpecialThanks.Info.Cloud">Provided cloud services for PCL CE-AI.</sys:String>
-    <sys:String x:Key="Setup.About.SpecialThanks.Info.IconDesign">Designed and created the PCL CE-AI icon.</sys:String>
+    <sys:String x:Key="Setup.About.SpecialThanks.Info.Cloud">Provided cloud services for PCL CE.</sys:String>
+    <sys:String x:Key="Setup.About.SpecialThanks.Info.IconDesign">Designed and created the PCL CE icon.</sys:String>
     <sys:String x:Key="Setup.About.SpecialThanks.Info.LinkModule">Provided the multiplayer module!</sys:String>
     <sys:String x:Key="Setup.About.SpecialThanks.Info.Mcim">Provided MCIM community resource mirrors and image hosting services for the help center!</sys:String>
     <sys:String x:Key="Setup.About.SpecialThanks.Info.Mcmod">Provided Chinese translation of mods and more related information!</sys:String>

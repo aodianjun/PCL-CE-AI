@@ -25,13 +25,13 @@ public partial class PageSetupAbout : MyPageRight
 
         BtnMaintainerGitHub.Click += (_, _) => Basics.OpenPath("https://github.com/aodianjun");
         BtnSponsorOriginalAuthor.Click += (_, _) => Basics.OpenPath("https://ifdian.net/a/LTCat");
-        BtnGitHubHome.Click += (_, _) => Basics.OpenPath("https://github.com/aodianjun/PCL-CE-AI");
+        BtnGitHubHome.Click += (_, _) => Basics.OpenPath("https://github.com/PCL-Community/PCL-CE");
         BtnSourceCode.Click +=
-            (_, _) => Basics.OpenPath("https://github.com/aodianjun/PCL-CE-AI");
+            (_, _) => Basics.OpenPath("https://github.com/PCL-Community/PCL-CE");
         BtnContributors.Click += (_, _) =>
-            Basics.OpenPath("https://github.com/aodianjun/PCL-CE-AI/graphs/contributors");
+            Basics.OpenPath("https://github.com/PCL-Community/PCL-CE/graphs/contributors");
         BtnCommunitySource.Click +=
-            (_, _) => Basics.OpenPath("https://github.com/aodianjun/PCL-CE-AI");
+            (_, _) => Basics.OpenPath("https://github.com/PCL-Community/PCL-CE");
         BtnCommunityLobbyPrivacy.Click += (_, _) =>
             Basics.OpenPath("https://www.pclc.cc/privacy/personal-info-brief.html");
         BtnNatayarkTerms.Click += (_, _) => Basics.OpenPath("https://account.naids.com/policy");

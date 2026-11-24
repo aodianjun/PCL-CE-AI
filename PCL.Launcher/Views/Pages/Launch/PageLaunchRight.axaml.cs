@@ -226,41 +226,21 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
         HintService.Show(Hints.Info(Lang.Text("Launch.Homepage.Loading")));
     }
 
-    private async void HideCommunityHint()
+    private void HideCommunityHint()
     {
         if (_communityHintDialogOpen)
             return;
 
         _communityHintDialogOpen = true;
-        var closeButton = this.FindControl<MyIconButton>("BtnHintClose");
-        closeButton?.IsEnabled = false;
         try
         {
-            var result = await DialogService.Instance.ShowAsync(
-                new InputDialogRequest
-                {
-                    Title = Lang.Text("Launch.Right.CommunityHint.InputTitle"),
-                    Buttons = DialogButtons.OkCancel,
-                    HighLight = false
-                });
-            var input = result.InputText ?? "";
-            if (string.IsNullOrWhiteSpace(input))
-                return;
-
-            input = new string(input.Where(char.IsAsciiLetter).ToArray()).ToLowerInvariant();
-            if (!input.Contains("pclcommunity"))
-            {
-                HintService.Show(Hints.Info(Lang.Text("Launch.Right.CommunityHint.WrongInput")));
-                return;
-            }
-
             AnimationService.DisposeControl(_panHint, true);
+            // 关闭一次后永久隐藏，下次启动不再显示。
             States.Hint.CEMessage = false;
         }
         finally
         {
             _communityHintDialogOpen = false;
-            closeButton?.IsEnabled = true;
         }
     }
 
