@@ -23,6 +23,7 @@ public partial class PageSetupAi : MyPageRight
     private readonly MyTextBox _txtModel;
     private readonly MyTextBox _txtApiKey;
     private readonly MyCheckBox _chkEnableTools;
+    private readonly MyCheckBox _chkEnableWeb;
     private readonly MyCheckBox _chkAutoCrash;
     private readonly TextBlock _labStatus;
     private readonly MyButton _btnSaveTest;
@@ -32,6 +33,7 @@ public partial class PageSetupAi : MyPageRight
     private readonly MyTextBox _txtAllowedDirectories;
     private readonly MyTextBox _txtContextLimit;
     private readonly MyTextBox _txtMaxOutput;
+    private readonly MyTextBox _txtMaxToolRounds;
     private readonly Dictionary<string, (int? Context, int? Output)> _modelMeta =
         new(StringComparer.OrdinalIgnoreCase);
     private bool _loadingModels;
@@ -44,6 +46,7 @@ public partial class PageSetupAi : MyPageRight
         _txtModel = this.FindControl<MyTextBox>("TxtModel")!;
         _txtApiKey = this.FindControl<MyTextBox>("TxtApiKey")!;
         _chkEnableTools = this.FindControl<MyCheckBox>("ChkEnableTools")!;
+        _chkEnableWeb = this.FindControl<MyCheckBox>("ChkEnableWeb")!;
         _chkAutoCrash = this.FindControl<MyCheckBox>("ChkAutoCrash")!;
         _labStatus = this.FindControl<TextBlock>("LabStatus")!;
         _btnSaveTest = this.FindControl<MyButton>("BtnSaveTest")!;
@@ -53,6 +56,7 @@ public partial class PageSetupAi : MyPageRight
         _txtAllowedDirectories = this.FindControl<MyTextBox>("TxtAllowedDirectories")!;
         _txtContextLimit = this.FindControl<MyTextBox>("TxtContextLimit")!;
         _txtMaxOutput = this.FindControl<MyTextBox>("TxtMaxOutput")!;
+        _txtMaxToolRounds = this.FindControl<MyTextBox>("TxtMaxToolRounds")!;
 
         _btnFetchModels.Click += FetchModels_OnClick;
         this.FindControl<MyButton>("BtnPickWorkDirectory")!.Click += PickWorkDirectory_OnClick;
@@ -77,11 +81,13 @@ public partial class PageSetupAi : MyPageRight
             : Config.Ai.Model;
         _txtApiKey.Text = Config.Ai.ApiKey;
         _chkEnableTools.Checked = Config.Ai.EnableTools;
+        _chkEnableWeb.Checked = Config.Ai.EnableWeb;
         _chkAutoCrash.Checked = Config.Ai.AutoAnalyzeCrash;
         _txtWorkDirectory.Text = Config.Ai.WorkDirectory;
         _txtAllowedDirectories.Text = Config.Ai.AllowedDirectories;
         _txtContextLimit.Text = Config.Ai.ContextLimit.ToString();
         _txtMaxOutput.Text = Config.Ai.MaxOutputTokens.ToString();
+        _txtMaxToolRounds.Text = Config.Ai.MaxToolRounds.ToString();
 
         if (AiChatService.IsConfigured)
             SetStatus(Lang.Text("Setup.Ai.Status.Configured"), false);
@@ -113,6 +119,7 @@ public partial class PageSetupAi : MyPageRight
             Config.Ai.Model = model;
             Config.Ai.ApiKey = key;
             Config.Ai.EnableTools = _chkEnableTools.Checked == true;
+            Config.Ai.EnableWeb = _chkEnableWeb.Checked == true;
             Config.Ai.AutoAnalyzeCrash = _chkAutoCrash.Checked == true;
             Config.Ai.WorkDirectory = _txtWorkDirectory.Text?.Trim() ?? "";
             Config.Ai.AllowedDirectories = _txtAllowedDirectories.Text?.Trim() ?? "";
@@ -122,6 +129,9 @@ public partial class PageSetupAi : MyPageRight
             Config.Ai.MaxOutputTokens = int.TryParse(_txtMaxOutput.Text?.Trim(), out var maxOutput)
                 ? Math.Max(256, maxOutput)
                 : 4096;
+            Config.Ai.MaxToolRounds = int.TryParse(_txtMaxToolRounds.Text?.Trim(), out var maxToolRounds)
+                ? Math.Clamp(maxToolRounds, 8, 500)
+                : 100;
             Config.Ai.OnboardingDone = true;
             return true;
         }

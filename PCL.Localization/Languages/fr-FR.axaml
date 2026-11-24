@@ -481,6 +481,7 @@
     <sys:String x:Key="Setup.Ai.Model">Model</sys:String>
     <sys:String x:Key="Setup.Ai.ApiKey">API key</sys:String>
     <sys:String x:Key="Setup.Ai.EnableTools">Allow the AI to operate the launcher (launch, switch versions, manage mods, open pages)</sys:String>
+    <sys:String x:Key="Setup.Ai.EnableWeb">Autoriser la recherche web et la lecture de pages par l'IA</sys:String>
     <sys:String x:Key="Setup.Ai.AutoCrash">Automatically submit crash reports to the AI</sys:String>
     <sys:String x:Key="Setup.Ai.SaveAndTest">Save and test</sys:String>
     <sys:String x:Key="Setup.Ai.GetKey">Get API key</sys:String>
@@ -532,6 +533,7 @@ La mise à jour va télécharger le paquet, remplacer ce lanceur et redémarrer 
     <sys:String x:Key="Setup.Ai.Models.Fetched">Fetched {0} models</sys:String>
     <sys:String x:Key="Setup.Ai.Models.Failed">Fetch failed: {0}</sys:String>
     <sys:String x:Key="Setup.Ai.ContextLimit">Context limit (tokens)</sys:String>
+    <sys:String x:Key="Setup.Ai.MaxToolRounds">Limite de tours d'outils (défaut 100, 8-500)</sys:String>
     <sys:String x:Key="Setup.Ai.MaxOutput">Max output (tokens)</sys:String>
     <sys:String x:Key="Setup.Ai.Params.AutoFilled">Parameters filled from the selected model</sys:String>
     <sys:String x:Key="Launch.Ai.Context.Short">Context {0} / {1} · {2}%</sys:String>

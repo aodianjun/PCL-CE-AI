@@ -1,5 +1,8 @@
+using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Avalonia.Threading;
 using PCL.Core.App;
 using PCL.Core.Logging;
@@ -194,6 +197,32 @@ public static class AiTools
                 },
                 Required("query")),
             Tool(
+                "web_search",
+                "联网搜索网页，返回标题、链接和摘要。需要最新信息或资料时使用。",
+                new JsonObject
+                {
+                    ["query"] = Str("搜索关键词"),
+                    ["max_results"] = new JsonObject
+                    {
+                        ["type"] = "integer",
+                        ["description"] = "返回条数，默认 5，最多 10"
+                    }
+                },
+                Required("query")),
+            Tool(
+                "web_fetch",
+                "读取一个网页并返回正文文本，只支持 http/https。",
+                new JsonObject
+                {
+                    ["url"] = Str("要读取的网页地址"),
+                    ["max_chars"] = new JsonObject
+                    {
+                        ["type"] = "integer",
+                        ["description"] = "最多返回的字符数，默认 20000"
+                    }
+                },
+                Required("url")),
+            Tool(
                 "open_folder",
                 "在资源管理器中打开工作目录或允许文件夹中的目录。",
                 new JsonObject
@@ -357,6 +386,14 @@ public static class AiTools
                     GetString(args, "query"),
                     GetString(args, "path")),
                 "open_folder" => OpenFolder(GetString(args, "path")),
+                "web_search" => await WebSearchAsync(
+                    GetString(args, "query"),
+                    GetInt(args, "max_results", 5),
+                    ct),
+                "web_fetch" => await WebFetchAsync(
+                    GetString(args, "url"),
+                    GetInt(args, "max_chars", 20000),
+                    ct),
                 "write_file" => WriteTextFile(
                     GetString(args, "path"),
                     GetString(args, "content"),
@@ -1539,6 +1576,213 @@ public static class AiTools
         return index < 0
             ? text
             : text[..index] + newValue + text[(index + oldValue.Length)..];
+    }
+
+    private static bool WebEnabled
+    {
+        get
+        {
+            try
+            {
+                return Config.Ai.EnableWeb;
+            }
+            catch (Exception)
+            {
+                return true;
+            }
+        }
+    }
+
+    private static async Task<string> WebSearchAsync(
+        string? query,
+        int maxResults,
+        CancellationToken ct)
+    {
+        if (!WebEnabled)
+            return "联网搜索已在设置中关闭。";
+        if (string.IsNullOrWhiteSpace(query))
+            return "缺少参数 query。";
+
+        maxResults = Math.Clamp(maxResults, 1, 10);
+        var url = "https://cn.bing.com/search?format=rss&count=" + maxResults
+                  + "&q=" + Uri.EscapeDataString(query.Trim());
+        try
+        {
+            using var response = await MetadataGetAsync(url, ct);
+            response.EnsureSuccessStatusCode();
+            var xml = await response.Content.ReadAsStringAsync(ct);
+            var document = XDocument.Parse(xml);
+            var results = new JsonArray();
+            foreach (var item in document.Descendants("item").Take(maxResults))
+            {
+                results.Add(new JsonObject
+                {
+                    ["title"] = CleanWebText(item.Element("title")?.Value ?? ""),
+                    ["url"] = item.Element("link")?.Value ?? "",
+                    ["snippet"] = CleanWebText(item.Element("description")?.Value ?? "")
+                });
+            }
+
+            return new JsonObject
+            {
+                ["query"] = query.Trim(),
+                ["count"] = results.Count,
+                ["results"] = results
+            }.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            return "联网搜索失败：" + ex.Message;
+        }
+    }
+
+    private static async Task<string> WebFetchAsync(
+        string? url,
+        int maxChars,
+        CancellationToken ct)
+    {
+        if (!WebEnabled)
+            return "联网读取已在设置中关闭。";
+        if (!IsAllowedWebUrl(url, out var uri, out var error))
+            return error ?? "网址无效。";
+
+        try
+        {
+            using var response = await MetadataGetAsync(uri.ToString(), ct);
+            var status = (int)response.StatusCode;
+            var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
+
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            var buffer = new char[3 * 1024 * 1024];
+            var read = await reader.ReadBlockAsync(buffer.AsMemory(0, buffer.Length), ct);
+            var raw = new string(buffer, 0, read);
+
+            var isHtml = contentType.Contains("html", StringComparison.OrdinalIgnoreCase);
+            var text = isHtml ? HtmlToText(raw) : raw;
+            maxChars = Math.Clamp(maxChars, 1000, 100000);
+            if (text.Length > maxChars)
+                text = text[..maxChars] + "\n…（已截断）";
+
+            return new JsonObject
+            {
+                ["url"] = uri.ToString(),
+                ["status"] = status,
+                ["content_type"] = contentType,
+                ["title"] = isHtml ? ExtractHtmlTitle(raw) : "",
+                ["chars"] = text.Length,
+                ["content"] = text
+            }.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            return "读取网页失败：" + ex.Message;
+        }
+    }
+
+    private static bool IsAllowedWebUrl(string? value, out Uri uri, out string? error)
+    {
+        error = null;
+        uri = null!;
+
+        if (!Uri.TryCreate(value?.Trim(), UriKind.Absolute, out var parsed)
+            || (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps))
+        {
+            error = "只支持 http/https 网址。";
+            return false;
+        }
+
+        if (parsed.IsLoopback || parsed.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+            || parsed.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)
+            || parsed.Host.Equals("metadata.google.internal", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "拒绝访问本机或内网地址。";
+            return false;
+        }
+
+        if (IPAddress.TryParse(parsed.Host, out var literal) && IsPrivateAddress(literal))
+        {
+            error = "拒绝访问本机或内网地址。";
+            return false;
+        }
+
+        try
+        {
+            if (Dns.GetHostAddresses(parsed.Host).Any(IsPrivateAddress))
+            {
+                error = "拒绝访问本机或内网地址。";
+                return false;
+            }
+        }
+        catch (Exception)
+        {
+            // 解析失败时交给请求阶段报错。
+        }
+
+        uri = parsed;
+        return true;
+    }
+
+    private static bool IsPrivateAddress(IPAddress address)
+    {
+        if (IPAddress.IsLoopback(address))
+            return true;
+
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+        {
+            if (address.IsIPv6LinkLocal || address.IsIPv6SiteLocal)
+                return true;
+            var v6 = address.GetAddressBytes();
+            return (v6[0] & 0xFE) == 0xFC;
+        }
+
+        var bytes = address.GetAddressBytes();
+        return bytes[0] == 0
+               || bytes[0] == 10
+               || bytes[0] == 127
+               || (bytes[0] == 169 && bytes[1] == 254)
+               || (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
+               || (bytes[0] == 192 && bytes[1] == 168);
+    }
+
+    private static string HtmlToText(string html)
+    {
+        html = Regex.Replace(
+            html,
+            "<script[^>]*>.*?</script>",
+            " ",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        html = Regex.Replace(
+            html,
+            "<style[^>]*>.*?</style>",
+            " ",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        html = Regex.Replace(
+            html,
+            """<br\s*/?>|</p>|</div>|</li>|</h[1-6]>""",
+            "\n",
+            RegexOptions.IgnoreCase);
+        html = Regex.Replace(html, "<[^>]+>", " ");
+        html = WebUtility.HtmlDecode(html);
+        html = Regex.Replace(html, """[ \t]+""", " ");
+        html = Regex.Replace(html, """(\r?\n\s*){3,}""", "\n\n");
+        return html.Trim();
+    }
+
+    private static string ExtractHtmlTitle(string html)
+    {
+        var match = Regex.Match(
+            html,
+            "<title[^>]*>(.*?)</title>",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        return match.Success ? CleanWebText(match.Groups[1].Value) : "";
+    }
+
+    private static string CleanWebText(string value)
+    {
+        value = Regex.Replace(value, "<[^>]+>", " ");
+        value = WebUtility.HtmlDecode(value);
+        return Regex.Replace(value, """\s+""", " ").Trim();
     }
 
     private static string OpenFolder(string? path)

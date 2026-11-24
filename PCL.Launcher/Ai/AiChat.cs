@@ -99,7 +99,7 @@ public sealed record AiContextUsage(
 /// </summary>
 public sealed class AiChatService
 {
-    private const int MaxToolRounds = 8;
+    private const int DefaultMaxToolRounds = 100;
     private const int MaxCrashReportChars = 12000;
 
     private static readonly Lazy<AiChatService> LazyInstance = new(() => new AiChatService());
@@ -807,7 +807,21 @@ public sealed class AiChatService
 
     private async Task RunToolLoopAsync(CancellationToken ct)
     {
-        for (var round = 0; round < MaxToolRounds; round++)
+        var maxRounds = DefaultMaxToolRounds;
+        try
+        {
+            maxRounds = Math.Clamp(Config.Ai.MaxToolRounds, 8, 500);
+        }
+        catch (Exception)
+        {
+            // 配置不可用时使用默认值。
+        }
+
+        string? lastCallSignature = null;
+        string? lastToolResult = null;
+        var repeatCount = 0;
+
+        for (var round = 0; round < maxRounds; round++)
         {
             ct.ThrowIfCancellationRequested();
             StatusChanged?.Invoke(round == 0 ? "AI 正在思考…" : "AI 正在继续处理…");
@@ -897,13 +911,36 @@ public sealed class AiChatService
                     ToolArguments = call.Arguments,
                     Content = result
                 });
+
+                var signature = call.Name + "\n" + call.Arguments;
+                if (signature == lastCallSignature
+                    && string.Equals(result, lastToolResult, StringComparison.Ordinal))
+                {
+                    repeatCount++;
+                    if (repeatCount >= 4)
+                    {
+                        AddMessage(new AiChatMessage
+                        {
+                            Role = AiRole.Assistant,
+                            Content = "检测到连续重复相同的工具调用且结果没有变化，已停止本轮，避免死循环。",
+                            IsError = true
+                        });
+                        return;
+                    }
+                }
+                else
+                {
+                    lastCallSignature = signature;
+                    lastToolResult = result;
+                    repeatCount = 1;
+                }
             }
         }
 
         AddMessage(new AiChatMessage
         {
             Role = AiRole.Assistant,
-            Content = "工具调用次数达到上限，已停止本轮处理。你可以直接问我要结果。",
+            Content = $"工具调用次数达到上限（{maxRounds} 次），已暂停本轮。回复“继续”可以接着处理。",
             IsError = true
         });
     }
@@ -1298,6 +1335,7 @@ public sealed class AiChatService
         builder.AppendLine("8. download_minecraft 与 launch_game 默认 wait=true，会等到安装或启动完成后再返回结果；拿到结果后直接继续下一步，不需要轮询 get_install_status。");
         builder.AppendLine("9. 用户消息里带“已复制到工作区”的附件时，直接用 read_file（大文件配合 max_chars 分段）或 search_files 读取路径，不要要求用户重新上传。");
         builder.AppendLine("10. 你可以在工作目录、启动器数据目录（PCL/）或允许访问的文件夹内用 write_file、replace_in_file、create_directory、move_path、delete_path 创建和修改文件。执行覆盖、移动或删除前先确认目标路径；不要删除或覆盖 conversations.json、config.v1.yml、日志等启动器运行文件，除非用户明确要求。");
+        builder.AppendLine("11. 需要最新信息或查资料时用 web_search 搜索，再用 web_fetch 读取网页正文；联网功能可在“设置 → AI 接入”里关闭。");
         builder.AppendLine();
         builder.AppendLine("当前启动器环境：");
         builder.AppendLine(minecraft);

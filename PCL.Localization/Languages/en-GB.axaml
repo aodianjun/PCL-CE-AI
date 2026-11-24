@@ -3753,6 +3753,7 @@ The updater will download the package, replace this launcher, and restart automa
     <sys:String x:Key="Setup.Ai.Model">Model</sys:String>
     <sys:String x:Key="Setup.Ai.ApiKey">API key</sys:String>
     <sys:String x:Key="Setup.Ai.EnableTools">Allow the AI to operate the launcher (launch, switch versions, manage mods, open pages)</sys:String>
+    <sys:String x:Key="Setup.Ai.EnableWeb">Allow AI web search and page reading</sys:String>
     <sys:String x:Key="Setup.Ai.AutoCrash">Automatically submit crash reports to the AI</sys:String>
     <sys:String x:Key="Setup.Ai.SaveAndTest">Save and test</sys:String>
     <sys:String x:Key="Setup.Ai.GetKey">Get API key</sys:String>
@@ -3798,6 +3799,7 @@ The updater will download the package, replace this launcher, and restart automa
     <sys:String x:Key="Setup.Ai.Models.Fetched">Fetched {0} models</sys:String>
     <sys:String x:Key="Setup.Ai.Models.Failed">Fetch failed: {0}</sys:String>
     <sys:String x:Key="Setup.Ai.ContextLimit">Context limit (tokens)</sys:String>
+    <sys:String x:Key="Setup.Ai.MaxToolRounds">Max tool rounds (default 100, 8-500)</sys:String>
     <sys:String x:Key="Setup.Ai.MaxOutput">Max output (tokens)</sys:String>
     <sys:String x:Key="Setup.Ai.Params.AutoFilled">Parameters filled from the selected model</sys:String>
     <sys:String x:Key="Launch.Ai.Context.Short">Context {0} / {1} · {2}%</sys:String>

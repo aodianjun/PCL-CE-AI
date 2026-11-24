@@ -3753,6 +3753,7 @@
     <sys:String x:Key="Setup.Ai.Model">模型</sys:String>
     <sys:String x:Key="Setup.Ai.ApiKey">API Key</sys:String>
     <sys:String x:Key="Setup.Ai.EnableTools">允許 AI 直接操作啟動器（啟動遊戲、切換版本、管理 Mod、跳轉頁面）</sys:String>
+    <sys:String x:Key="Setup.Ai.EnableWeb">允許 AI 連網搜尋與讀取網頁</sys:String>
     <sys:String x:Key="Setup.Ai.AutoCrash">遊戲崩潰時自動把報告交給 AI 分析</sys:String>
     <sys:String x:Key="Setup.Ai.SaveAndTest">儲存並測試</sys:String>
     <sys:String x:Key="Setup.Ai.GetKey">取得 API Key</sys:String>
@@ -3798,6 +3799,7 @@
     <sys:String x:Key="Setup.Ai.Models.Fetched">已取得 {0} 個模型</sys:String>
     <sys:String x:Key="Setup.Ai.Models.Failed">取得失敗：{0}</sys:String>
     <sys:String x:Key="Setup.Ai.ContextLimit">上下文上限 (tokens)</sys:String>
+    <sys:String x:Key="Setup.Ai.MaxToolRounds">工具輪次上限（預設 100，8-500）</sys:String>
     <sys:String x:Key="Setup.Ai.MaxOutput">最大輸出 (tokens)</sys:String>
     <sys:String x:Key="Setup.Ai.Params.AutoFilled">已依模型自動填入參數</sys:String>
     <sys:String x:Key="Launch.Ai.Context.Short">上下文 {0} / {1} · {2}%</sys:String>

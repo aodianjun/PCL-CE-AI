@@ -640,6 +640,9 @@ public static partial class Config
         /// <summary>是否允许 AI 调用本地工具（启动、改 Mod、跳转页面等）。</summary>
         [ConfigItem<bool>("AiEnableTools", true, ConfigSource.Local)] public partial bool EnableTools { get; set; }
 
+        /// <summary>允许 AI 联网搜索和读取网页。</summary>
+        [ConfigItem<bool>("AiEnableWeb", true, ConfigSource.Local)] public partial bool EnableWeb { get; set; }
+
         /// <summary>游戏崩溃时自动把报告交给 AI 分析。</summary>
         [ConfigItem<bool>("AiAutoAnalyzeCrash", true, ConfigSource.Local)] public partial bool AutoAnalyzeCrash { get; set; }
 
@@ -660,6 +663,9 @@ public static partial class Config
 
         /// <summary>单次回复最大输出 tokens。</summary>
         [ConfigItem<int>("AiMaxOutputTokens", 4096, ConfigSource.Local)] public partial int MaxOutputTokens { get; set; }
+
+        /// <summary>单轮对话允许的最大工具调用轮次（防止死循环，默认 100）。</summary>
+        [ConfigItem<int>("AiMaxToolRounds", 100, ConfigSource.Local)] public partial int MaxToolRounds { get; set; }
 
         /// <summary>AI 文件操作的工作目录。</summary>
         [ConfigItem<string>("AiWorkDirectory", "", ConfigSource.Local)] public partial string WorkDirectory { get; set; }
