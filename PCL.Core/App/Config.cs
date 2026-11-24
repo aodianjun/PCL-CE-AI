@@ -42,7 +42,7 @@ public static partial class Config
     /// </summary>
     [ConfigGroup("Network")] partial class NetworkConfigGroup
     {
-        [ConfigItem<bool>("SystemNetEnableDoH", true)] public partial bool EnableDoH { get; set; }
+        [ConfigItem<bool>("SystemNetEnableDoH", false)] public partial bool EnableDoH { get; set; }
 
         [ConfigGroup("HttpProxy")] partial class HttpProxyConfigGroup
         {

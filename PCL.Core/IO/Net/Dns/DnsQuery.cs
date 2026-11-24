@@ -82,13 +82,18 @@ public class DnsQuery : IDisposable
             return await System.Net.Dns.GetHostAddressesAsync(host, cts);
         }
 
-        return queryResponse.Where(static x => x is not null)
+        var addresses = queryResponse.Where(static x => x is not null)
             .SelectMany(static x => x!.Answers)
             .Where(static x => x.Type is DnsQueryType.A or DnsQueryType.AAAA)
             .Select(static x => x.Resource as DnsIpAddressResource)
             .Where(static x => x is not null)
             .Select(static x => x!.IPAddress)
             .ToArray();
+        if (addresses.Length > 0)
+            return addresses;
+
+        LogWrapper.Warn(ModuleName, $"DoH returned no address for {host}, use system default DNS");
+        return await System.Net.Dns.GetHostAddressesAsync(host, cts);
     }
 
     public void Dispose()
