@@ -34,6 +34,7 @@ public partial class PageLaunchAi : MyPageRight, IRefreshable
 
     private readonly Grid _panChat;
     private readonly ContentControl _panHomeOverlay;
+    private readonly ContentControl _panHomeSidebar;
     private readonly MyButton _btnOpenAi;
     private readonly Panel _panInput;
     private readonly Panel _panLaunching;
@@ -72,6 +73,7 @@ public partial class PageLaunchAi : MyPageRight, IRefreshable
 
         _panChat = this.FindControl<Grid>("PanChat")!;
         _panHomeOverlay = this.FindControl<ContentControl>("PanHomeOverlay")!;
+        _panHomeSidebar = this.FindControl<ContentControl>("PanHomeSidebar")!;
         _btnOpenAi = this.FindControl<MyButton>("BtnOpenAi")!;
         _panInput = this.FindControl<Panel>("PanInput")!;
         _panLaunching = this.FindControl<Panel>("PanLaunching")!;
@@ -165,19 +167,29 @@ public partial class PageLaunchAi : MyPageRight, IRefreshable
             ShowHomeContent(home);
     }
 
-    /// <summary>在内容区显示主页，底部操作栏保持不变。</summary>
+    /// <summary>主页占满内容区，AI 侧边栏隐藏。</summary>
     public void ShowHomeContent(Control home)
     {
+        if (ReferenceEquals(_panHomeSidebar.Content, home))
+            _panHomeSidebar.Content = null;
         _panHomeOverlay.Content = home;
-        _panChat.IsVisible = false;
         _panHomeOverlay.IsVisible = true;
+        _panHomeSidebar.IsVisible = false;
+        _panChat.IsVisible = false;
         _btnOpenAi.IsVisible = true;
     }
 
-    /// <summary>隐藏主页，恢复 AI 对话内容区。</summary>
+    /// <summary>AI 占主内容区，主页变成右侧窄侧边栏。</summary>
     public void ShowAiContent()
     {
+        if (_panHomeOverlay.Content is Control home)
+        {
+            _panHomeOverlay.Content = null;
+            _panHomeSidebar.Content = home;
+        }
+
         _panHomeOverlay.IsVisible = false;
+        _panHomeSidebar.IsVisible = true;
         _panChat.IsVisible = true;
         _btnOpenAi.IsVisible = false;
     }
