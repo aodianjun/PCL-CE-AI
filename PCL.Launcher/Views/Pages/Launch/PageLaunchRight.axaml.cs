@@ -107,6 +107,12 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
 
     public static PageLaunchRight? Current { get; private set; }
 
+    /// <summary>当前主页内容是否为空（空白主页）。</summary>
+    public bool IsHomepageEmpty { get; private set; }
+
+    /// <summary>主页内容解析完成后触发，参数表示是否为空。</summary>
+    public event Action<bool>? HomepageEmptyChanged;
+
     /// <inheritdoc />
     public void Refresh()
     {
@@ -274,6 +280,13 @@ public partial class PageLaunchRight : MyPageRight, IRefreshable
 
     private void LoadContent(HomepageContent content)
     {
+        var isEmpty = content.Kind == HomepageSourceKind.Blank;
+        if (IsHomepageEmpty != isEmpty)
+        {
+            IsHomepageEmpty = isEmpty;
+            HomepageEmptyChanged?.Invoke(isEmpty);
+        }
+
         if (content.Kind != HomepageSourceKind.CustomXaml)
             _lastWpfToastSource = null;
 

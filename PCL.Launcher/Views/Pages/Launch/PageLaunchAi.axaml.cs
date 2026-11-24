@@ -35,6 +35,8 @@ public partial class PageLaunchAi : MyPageRight, IRefreshable
     private readonly Grid _panChat;
     private readonly ContentControl _panHomeOverlay;
     private readonly ContentControl _panHomeSidebar;
+    private bool _homeIsBlank;
+    private bool _blankAutoExpanded;
     private readonly MyButton _btnOpenAi;
     private readonly Panel _panInput;
     private readonly Panel _panLaunching;
@@ -155,10 +157,31 @@ public partial class PageLaunchAi : MyPageRight, IRefreshable
     /// <summary>把主页挂进内容区；默认先显示主页，底部操作栏保持不变。</summary>
     public void AttachHomePage(Control home)
     {
+        if (home is PageLaunchRight page)
+        {
+            page.HomepageEmptyChanged -= OnHomepageEmptyChanged;
+            page.HomepageEmptyChanged += OnHomepageEmptyChanged;
+            _homeIsBlank = page.IsHomepageEmpty;
+        }
+
         _panHomeOverlay.Content = home;
         ShowHomeRequested -= OnShowHomeRequested;
         ShowHomeRequested += OnShowHomeRequested;
         ShowHomeContent(home);
+    }
+
+    private void OnHomepageEmptyChanged(bool isEmpty)
+    {
+        _homeIsBlank = isEmpty;
+        if (_panHomeSidebar.IsVisible)
+            _panHomeSidebar.IsVisible = !isEmpty;
+
+        if (!isEmpty || _blankAutoExpanded)
+            return;
+
+        // 主页没有任何内容时，默认展开 AI 对话，避免打开启动器看到一片空白。
+        _blankAutoExpanded = true;
+        ShowAiContent();
     }
 
     private void OnShowHomeRequested()
@@ -189,7 +212,7 @@ public partial class PageLaunchAi : MyPageRight, IRefreshable
         }
 
         _panHomeOverlay.IsVisible = false;
-        _panHomeSidebar.IsVisible = true;
+        _panHomeSidebar.IsVisible = !_homeIsBlank;
         _panChat.IsVisible = true;
         _btnOpenAi.IsVisible = false;
     }
