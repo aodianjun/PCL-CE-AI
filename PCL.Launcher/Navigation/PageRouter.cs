@@ -158,12 +158,6 @@ public static class PageRouter
 
             NavigationState.Navigate(route, host.IsSecondary, host.Tab);
 
-            if (left is null && _leftHost is not null)
-            {
-                _leftHost.Content = null;
-                _leftHost.IsVisible = false;
-            }
-
             _MountPages(left, right, route);
 
             _hasNavigated = true;
@@ -288,8 +282,8 @@ public static class PageRouter
             }
 
             if (left is IPageView leftView) leftView.OnNavigatedTo(route.Parameter);
-            if (right is IPageRightContainer newRightPage) newRightPage.PageOnEnter();
             if (right is IPageView rightView) rightView.OnNavigatedTo(route.Parameter);
+            if (right is IPageRightContainer newRightPage) newRightPage.PageOnEnter();
             LayoutProbe.CheckAfterLayout(right, $"{route.Page}/{route.SubPage}");
             FocusFirst(right);
         }

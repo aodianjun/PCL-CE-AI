@@ -77,13 +77,31 @@
                                Text="-AI" />
                 </StackPanel>
             </Grid>
-            <StackPanel x:Name="PanTitleSelect"
-                        Grid.Column="1"
-                        Orientation="Horizontal"
+            <Grid x:Name="PanTitleSelect"
+                  Grid.Column="1"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Center"
+                  Height="27"
+                  Margin="13,0">
+                <Border x:Name="TabSelectionIndicator"
+                        Height="27"
                         HorizontalAlignment="Left"
                         VerticalAlignment="Center"
-                        Height="27"
-                        Margin="13,0" />
+                        CornerRadius="13.5"
+                        Background="White"
+                        IsHitTestVisible="False"
+                        ZIndex="0">
+                    <Border.RenderTransform>
+                        <TranslateTransform />
+                    </Border.RenderTransform>
+                </Border>
+                <StackPanel x:Name="PanTitleTabs"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            Height="27"
+                            ZIndex="1" />
+            </Grid>
         </Grid>
         <Grid x:Name="PanInnerTitle"
               Opacity="0"
