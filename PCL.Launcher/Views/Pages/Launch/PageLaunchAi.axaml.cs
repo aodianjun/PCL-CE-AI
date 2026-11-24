@@ -186,7 +186,10 @@ public partial class PageLaunchAi : MyPageRight, IRefreshable
 
     private void OnShowHomeRequested()
     {
-        if (_panHomeOverlay.Content is Control home)
+        // 主页可能在覆盖层（主页模式）或右侧栏（AI 模式）中，两处都要找。
+        var home = _panHomeOverlay.Content as Control
+                   ?? _panHomeSidebar.Content as Control;
+        if (home is not null)
             ShowHomeContent(home);
     }
 
