@@ -2,7 +2,11 @@ using System.Diagnostics;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json.Nodes;
+using Avalonia.Controls;
+using Avalonia.Layout;
 using Avalonia.Threading;
+using PCL.Network;
+using PCL.Network.Loaders;
 using PCL.Core.App;
 using PCL.Core.App.Localization;
 using PCL.Core.Logging;
@@ -142,7 +146,7 @@ public static class AiSelfUpdater
         var downloadPath = Path.Combine(updateDir, assetName);
         try
         {
-            await DownloadFileAsync(downloadUrl, downloadPath);
+            await DownloadWithPclAsync(downloadUrl, downloadPath, versionName);
             var actualSize = new FileInfo(downloadPath).Length;
             if (expectedSize > 0 && actualSize != expectedSize)
                 throw new InvalidOperationException(
@@ -200,13 +204,88 @@ public static class AiSelfUpdater
         }
     }
 
-    private static async Task DownloadFileAsync(string url, string path)
+    /// <summary>使用 PCL 自带下载器下载更新包：任务列表与进度窗口都会显示进度。</summary>
+    private static async Task DownloadWithPclAsync(string url, string path, string version)
     {
-        using var response = await GetWithFallbackAsync(url);
-        response.EnsureSuccessStatusCode();
-        await using var source = await response.Content.ReadAsStreamAsync();
-        await using var target = File.Create(path);
-        await source.CopyToAsync(target);
+        var file = new DownloadFile([url], path);
+        var loader = new LoaderDownload($"PCL CE-AI {version}", [file]);
+        var combo = new Loading.LoaderCombo<int>(
+            $"PCL CE-AI {version}",
+            [loader]);
+
+        Window? window = null;
+        ProgressBar? bar = null;
+        TextBlock? title = null;
+        TextBlock? percent = null;
+        try
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                title = new TextBlock
+                {
+                    Text = Lang.Text("Update.Ai.Downloading", version),
+                    FontSize = 14,
+                    TextWrapping = Avalonia.Media.TextWrapping.Wrap
+                };
+                bar = new ProgressBar
+                {
+                    Minimum = 0,
+                    Maximum = 1,
+                    Height = 8,
+                    Margin = new Avalonia.Thickness(0, 12, 0, 8)
+                };
+                percent = new TextBlock
+                {
+                    Text = "0%",
+                    FontSize = 12,
+                    Opacity = 0.7
+                };
+                var panel = new StackPanel
+                {
+                    Margin = new Avalonia.Thickness(24, 20, 24, 20),
+                    Spacing = 2,
+                    Children = { title, bar, percent }
+                };
+                window = new Window
+                {
+                    Title = "PCL CE-AI",
+                    Width = 420,
+                    Height = 150,
+                    CanResize = false,
+                    ShowInTaskbar = false,
+                    Topmost = true,
+                    WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                    Content = panel
+                };
+                window.Show();
+                Loading.LoaderTaskbarAdd(combo);
+                combo.Start();
+            });
+
+            while (combo.State is LoadState.Waiting or LoadState.Loading)
+            {
+                await Task.Delay(200);
+                var progress = combo.Progress;
+                var speed = file.Speed > 0
+                    ? $"  {file.Speed / 1024d / 1024d:0.0} MB/s"
+                    : "";
+                var text = $"{progress * 100d:0.0}%{speed}";
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (bar is not null)
+                        bar.Value = progress;
+                    if (percent is not null)
+                        percent.Text = text;
+                });
+            }
+
+            if (file.State != NetState.Finished)
+                throw new InvalidOperationException("更新包下载失败或被中断。");
+        }
+        finally
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => window?.Close());
+        }
     }
 
     private static JsonObject? FindAsset(JsonArray? assets, bool singleFile)
