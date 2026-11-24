@@ -7,15 +7,19 @@ namespace PCL.Views.Pages.Launch;
 /// 启动页宿主：同一块内容区在“主页内容”和“AI 对话”之间切换。
 /// 左栏（<see cref="PageLaunchLeft" />）仍由组合根创建，但只作为账号/启动状态控制器。
 /// </summary>
-public sealed class PageLaunchHost(
-    PageLaunchLeft left,
-    PageLaunchRight right,
-    PageLaunchAi ai) : IPageHost
+public sealed class PageLaunchHost : IPageHost
 {
-    private readonly PageLaunchWorkspace _workspace = new(ai, right);
+    private readonly PageLaunchAi _ai;
+
+    public PageLaunchHost(PageLaunchLeft left, PageLaunchRight right, PageLaunchAi ai)
+    {
+        Left = left;
+        _ai = ai;
+        ai.AttachHomePage(right);
+    }
 
     /// <summary>未被挂载的左栏控制器，仅供需要访问启动状态的地方使用。</summary>
-    public PageLaunchLeft Left { get; } = left;
+    public PageLaunchLeft Left { get; }
 
     public PageId Page => PageIds.Launch;
 
@@ -35,6 +39,6 @@ public sealed class PageLaunchHost(
 
     public Control GetRight(PageRoute stack)
     {
-        return _workspace;
+        return _ai;
     }
 }

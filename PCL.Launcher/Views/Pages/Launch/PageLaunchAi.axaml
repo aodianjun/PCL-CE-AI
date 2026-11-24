@@ -246,6 +246,21 @@
             </Panel>
         </Grid>
 
+        <!-- 主页内容覆盖层：只覆盖内容区，底部操作栏保持可见 -->
+        <ContentControl x:Name="PanHomeOverlay"
+                        Grid.Row="0"
+                        IsVisible="False" />
+
+        <!-- 主页模式下打开 AI 对话 -->
+        <ui:MyButton x:Name="BtnOpenAi"
+                     Grid.Row="0"
+                     Height="42"
+                     Margin="26,0,0,26"
+                     Padding="22,0"
+                     HorizontalAlignment="Left"
+                     VerticalAlignment="Bottom"
+                     Text="{loc:Loc Launch.Ai.OpenAi}" />
+
         <!-- 底部操作栏：左下设置 + 账号 / 版本 / 启动 -->
         <Grid x:Name="PanBottom"
               Grid.Row="1"

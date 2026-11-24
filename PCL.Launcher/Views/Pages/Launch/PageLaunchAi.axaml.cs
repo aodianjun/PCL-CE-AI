@@ -32,6 +32,9 @@ public partial class PageLaunchAi : MyPageRight, IRefreshable
     private readonly Dictionary<AiChatMessage, BubbleView> _bubbles = [];
     private readonly List<string> _launchLogBuffer = [];
 
+    private readonly Grid _panChat;
+    private readonly ContentControl _panHomeOverlay;
+    private readonly MyButton _btnOpenAi;
     private readonly Panel _panInput;
     private readonly Panel _panLaunching;
     private readonly MyScrollViewer _sclChat;
@@ -67,6 +70,9 @@ public partial class PageLaunchAi : MyPageRight, IRefreshable
         InitializeComponent();
         Current = this;
 
+        _panChat = this.FindControl<Grid>("PanChat")!;
+        _panHomeOverlay = this.FindControl<ContentControl>("PanHomeOverlay")!;
+        _btnOpenAi = this.FindControl<MyButton>("BtnOpenAi")!;
         _panInput = this.FindControl<Panel>("PanInput")!;
         _panLaunching = this.FindControl<Panel>("PanLaunching")!;
         _sclChat = this.FindControl<MyScrollViewer>("SclChat")!;
@@ -115,6 +121,7 @@ public partial class PageLaunchAi : MyPageRight, IRefreshable
         _btnVersion.Click += Version_OnClick;
         this.FindControl<MyIconButton>("BtnShowHome")!.Click +=
             (_, _) => ShowHomeRequested?.Invoke();
+        _btnOpenAi.Click += (_, _) => ShowAiContent();
         _btnSend.Click += Send_OnClick;
         _btnCancelReply.Click += CancelReply_OnClick;
         this.FindControl<MyIconButton>("BtnClearChat")!.Click += ClearChat_OnClick;
@@ -142,6 +149,38 @@ public partial class PageLaunchAi : MyPageRight, IRefreshable
 
     /// <summary>请求切回主页内容。</summary>
     public event Action? ShowHomeRequested;
+
+    /// <summary>把主页挂进内容区；默认先显示主页，底部操作栏保持不变。</summary>
+    public void AttachHomePage(Control home)
+    {
+        _panHomeOverlay.Content = home;
+        ShowHomeRequested -= OnShowHomeRequested;
+        ShowHomeRequested += OnShowHomeRequested;
+        ShowHomeContent(home);
+    }
+
+    private void OnShowHomeRequested()
+    {
+        if (_panHomeOverlay.Content is Control home)
+            ShowHomeContent(home);
+    }
+
+    /// <summary>在内容区显示主页，底部操作栏保持不变。</summary>
+    public void ShowHomeContent(Control home)
+    {
+        _panHomeOverlay.Content = home;
+        _panChat.IsVisible = false;
+        _panHomeOverlay.IsVisible = true;
+        _btnOpenAi.IsVisible = true;
+    }
+
+    /// <summary>隐藏主页，恢复 AI 对话内容区。</summary>
+    public void ShowAiContent()
+    {
+        _panHomeOverlay.IsVisible = false;
+        _panChat.IsVisible = true;
+        _btnOpenAi.IsVisible = false;
+    }
 
     /// <inheritdoc />
     public void Refresh()
