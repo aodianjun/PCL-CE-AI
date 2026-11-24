@@ -16,6 +16,10 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // 新版本 exe 以 update 参数启动时，先完成替换并重启，再退出。
+        if (UpdateCommand.TryRun(args))
+            return;
+
         var platform = PlatformDetector.Detect();
 
         PlatformStartup.Initialize(platform, args);

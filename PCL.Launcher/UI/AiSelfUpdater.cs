@@ -103,8 +103,7 @@ public static class AiSelfUpdater
             return;
         }
 
-        var singleFile = string.IsNullOrEmpty(typeof(AiSelfUpdater).Assembly.Location);
-        var asset = FindAsset(release["assets"] as JsonArray, singleFile);
+        var asset = FindAsset(release["assets"] as JsonArray);
         if (asset is null)
         {
             if (manual)
@@ -141,9 +140,10 @@ public static class AiSelfUpdater
 
         HintService.Show(Hints.Info(Lang.Text("Update.Ai.Downloading", versionName)));
 
-        var updateDir = Path.Combine(Path.GetTempPath(), "PCL-CE-AI-Update");
+        // 与 PCL 一致：更新包放进启动器自己的 PCL 目录，替换完成后由新 exe 自清理。
+        var updateDir = Paths.Data;
         Directory.CreateDirectory(updateDir);
-        var downloadPath = Path.Combine(updateDir, assetName);
+        var downloadPath = Path.Combine(updateDir, "PCL-CE-AI-Update.exe");
         try
         {
             await DownloadWithPclAsync(downloadUrl, downloadPath, versionName);
@@ -168,7 +168,7 @@ public static class AiSelfUpdater
 
         try
         {
-            StartUpdaterScript(target, downloadPath, singleFile);
+            StartUpdaterScript(target, downloadPath);
         }
         catch (Exception ex)
         {
@@ -178,6 +178,7 @@ public static class AiSelfUpdater
         }
 
         LogWrapper.Info("Update", $"更新 {versionName} 已下载，等待退出后覆盖：{target}");
+        await Task.Delay(1000);
         Dispatcher.UIThread.Post(UiInteraction.Shutdown);
     }
 
@@ -288,7 +289,7 @@ public static class AiSelfUpdater
         }
     }
 
-    private static JsonObject? FindAsset(JsonArray? assets, bool singleFile)
+    private static JsonObject? FindAsset(JsonArray? assets)
     {
         if (assets is null)
             return null;
@@ -298,75 +299,26 @@ public static class AiSelfUpdater
             .FirstOrDefault(asset =>
             {
                 var name = asset["name"]?.ToString() ?? "";
-                if (name.EndsWith(".sigstore.json", StringComparison.OrdinalIgnoreCase))
-                    return false;
-                if (singleFile)
-                    return name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-                           && name.Contains("win-x64", StringComparison.OrdinalIgnoreCase);
-                return name.EndsWith("-fdd.zip", StringComparison.OrdinalIgnoreCase);
+                return name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                       && name.Contains("win-x64", StringComparison.OrdinalIgnoreCase)
+                       && !name.Contains("-fdd", StringComparison.OrdinalIgnoreCase);
             });
     }
 
-    private static void StartUpdaterScript(string targetExe, string downloadedFile, bool singleFile)
+    private static void StartUpdaterScript(string targetExe, string downloadedFile)
     {
-        var temp = Path.GetDirectoryName(downloadedFile) ?? Path.GetTempPath();
-        var scriptPath = Path.Combine(temp, "apply-update.ps1");
-        var targetDir = Path.GetDirectoryName(targetExe) ?? AppContext.BaseDirectory;
-        var pid = Environment.ProcessId;
-
-        string script;
-        if (singleFile)
+        // 用刚下载的新 exe 自身作为替换进程：它会等本进程退出后
+        // 覆盖旧 exe 并重新启动，避免依赖外部脚本被杀软拦截。
+        var startInfo = new ProcessStartInfo(downloadedFile)
         {
-            script = $@"
-$ErrorActionPreference = 'Stop'
-$pidToWait = {pid}
-$target = {PsQuote(targetExe)}
-$new = {PsQuote(downloadedFile)}
-while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) {{
-    Start-Sleep -Milliseconds 400
-}}
-$staging = $target + '.new'
-Copy-Item -LiteralPath $new -Destination $staging -Force
-Move-Item -LiteralPath $staging -Destination $target -Force
-Start-Process -FilePath $target -WorkingDirectory {PsQuote(targetDir)}
-Start-Sleep -Seconds 2
-Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
-";
-        }
-        else
-        {
-            script = $@"
-$ErrorActionPreference = 'Stop'
-$pidToWait = {pid}
-$target = {PsQuote(targetExe)}
-$targetDir = {PsQuote(targetDir)}
-$zip = {PsQuote(downloadedFile)}
-$extract = Join-Path $env:TEMP ('PCL-CE-AI-Update-' + [Guid]::NewGuid().ToString('N'))
-while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) {{
-    Start-Sleep -Milliseconds 400
-}}
-Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
-Copy-Item -Path (Join-Path $extract '*') -Destination $targetDir -Recurse -Force
-Start-Process -FilePath $target -WorkingDirectory $targetDir
-Start-Sleep -Seconds 2
-Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
-";
-        }
-
-        File.WriteAllText(scriptPath, script, new UTF8Encoding(true));
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File {PsQuote(scriptPath)}",
             UseShellExecute = false,
             CreateNoWindow = true,
-            WindowStyle = ProcessWindowStyle.Hidden
+            WindowStyle = ProcessWindowStyle.Hidden,
+            WorkingDirectory = Path.GetDirectoryName(downloadedFile) ?? string.Empty,
+            Arguments = $"update {Environment.ProcessId} \"{targetExe}\" \"{downloadedFile}\" true"
         };
         Process.Start(startInfo);
     }
-
-    private static string PsQuote(string value) => "'" + value.Replace("'", "''") + "'";
 
     private static bool IsNewerVersion(string tag, string currentVersion)
     {
