@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using PCL.Core.App;
 using PCL.Views.Pages.Tools;
+using PCL.Views.Shell;
 using static PCL.Navigation.PageDescriptorFactory;
 
 namespace PCL.Navigation.Catalog;

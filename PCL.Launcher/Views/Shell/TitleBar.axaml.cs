@@ -52,11 +52,34 @@ public partial class TitleBar : UserControl
 
         ThemeService.ColorThemeChanged += _OnColorThemeChanged;
         ThemeService.ColorModeChanged += _OnColorModeChanged;
+        HiddenFeatureState.Changed += OnHiddenFeatureStateChanged;
         Unloaded += (_, _) =>
         {
+            HiddenFeatureState.Changed -= OnHiddenFeatureStateChanged;
             ThemeService.ColorThemeChanged -= _OnColorThemeChanged;
             ThemeService.ColorModeChanged -= _OnColorModeChanged;
         };
+    }
+
+    private void OnHiddenFeatureStateChanged()
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(OnHiddenFeatureStateChanged);
+            return;
+        }
+
+        var previous = _tabButtons.FirstOrDefault(pair => pair.Value.Checked).Key;
+        BuildMainTabs();
+        if (MainTabDescriptor.Normalize(previous) != previous)
+        {
+            SetTabChecked(MainTab.Launch);
+            PageRouter.Navigate(MainTab.Launch);
+        }
+        else
+        {
+            SetTabChecked(previous);
+        }
     }
 
     private bool CanAnimateShell =>
@@ -304,14 +327,13 @@ public partial class TitleBar : UserControl
             _tabButtons[descriptor.Id] = button;
             PanTitleTabs.Children.Add(button);
         }
-
-        SetTabChecked(MainTab.Launch);
     }
 
     private void SetTabChecked(MainTab tab)
     {
+        var target = MainTabDescriptor.Normalize(tab);
         foreach (var (id, button) in _tabButtons)
-            button.Checked = id == tab;
+            button.Checked = id == target;
         Dispatcher.UIThread.Post(() => UpdateTabSelectionIndicator(true));
     }
 
